@@ -41,6 +41,8 @@ class Product(models.Model):
     @property
     def volume(self) -> float:
         """Volume in cubic centimeters (cm³)."""
+        if self.length is None or self.width is None or self.height is None:
+            return 0.0
         return float(self.length * self.width * self.height)
 
     @property
@@ -51,9 +53,13 @@ class Product(models.Model):
     @property
     def dimensions_display(self) -> str:
         """Formatted string of dimensions."""
+        if self.length is None or self.width is None or self.height is None:
+            return "-"
         return f"{self.length} x {self.width} x {self.height} cm"
 
     @property
     def sorted_dimensions(self) -> list[float]:
         """Dimensions sorted in ascending order for rotational orientation comparison."""
+        if self.length is None or self.width is None or self.height is None:
+            return [0.0, 0.0, 0.0]
         return sorted([float(self.length), float(self.width), float(self.height)])

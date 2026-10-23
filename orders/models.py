@@ -35,16 +35,22 @@ class Order(models.Model):
     @property
     def total_weight(self) -> Decimal:
         """Total weight of all products in this order in kg."""
+        if not self.pk:
+            return Decimal('0.00')
         return sum((item.product.weight * item.quantity for item in self.items.select_related('product')), Decimal('0.00'))
 
     @property
     def total_volume(self) -> float:
         """Total volume of all products in this order in cm³."""
+        if not self.pk:
+            return 0.0
         return sum((item.product.volume * item.quantity for item in self.items.select_related('product')), 0.0)
 
     @property
     def total_quantity(self) -> int:
         """Total number of individual item units in this order."""
+        if not self.pk:
+            return 0
         return sum((item.quantity for item in self.items.all()), 0)
 
 
@@ -71,8 +77,12 @@ class OrderItem(models.Model):
 
     @property
     def total_weight(self) -> Decimal:
+        if not hasattr(self, 'product') or self.product is None or self.quantity is None or getattr(self.product, 'weight', None) is None:
+            return Decimal('0.00')
         return self.product.weight * self.quantity
 
     @property
     def total_volume(self) -> float:
+        if not hasattr(self, 'product') or self.product is None or self.quantity is None:
+            return 0.0
         return self.product.volume * self.quantity

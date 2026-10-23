@@ -44,6 +44,8 @@ class Box(models.Model):
     @property
     def volume(self) -> float:
         """Internal volume in cubic centimeters (cm³)."""
+        if self.length is None or self.width is None or self.height is None:
+            return 0.0
         return float(self.length * self.width * self.height)
 
     @property
@@ -54,6 +56,8 @@ class Box(models.Model):
     @property
     def dimensions_display(self) -> str:
         """Formatted string of dimensions."""
+        if self.length is None or self.width is None or self.height is None:
+            return "-"
         return f"{self.length} x {self.width} x {self.height} cm"
 
     def can_fit_single_item(self, item_length: float, item_width: float, item_height: float) -> bool:
@@ -61,6 +65,8 @@ class Box(models.Model):
         Check if a single item's dimensions can physically fit inside this box,
         considering all 6 possible 3D orthogonal orientations.
         """
+        if self.length is None or self.width is None or self.height is None:
+            return False
         item_dims = sorted([float(item_length), float(item_width), float(item_height)])
         box_dims = sorted([float(self.length), float(self.width), float(self.height)])
         return (

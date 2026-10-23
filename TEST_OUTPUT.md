@@ -1,6 +1,6 @@
 # Test Run Output
 
-This document contains the verbatim terminal execution output of the test suite for the **AI-Assisted Box Selection System**, verifying all 37 unit, integration, and algorithmic workflow test cases.
+This document contains the verbatim terminal execution output of the test suite for the **AI-Assisted Box Selection System**, verifying all 44 unit, integration, algorithmic workflow, and dimensional validation test cases.
 
 ## Test Environment
 - **OS**: Windows 11 / Windows Server
@@ -17,7 +17,7 @@ This document contains the verbatim terminal execution output of the test suite 
 ```text
 $ python manage.py test --verbosity=2
 Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
-Found 37 test(s).
+Found 44 test(s).
 Operations to perform:
   Synchronize unmigrated apps: corsheaders, messages, rest_framework, staticfiles
   Apply all migrations: admin, auth, boxes, contenttypes, orders, products, recommendations, sessions
@@ -67,6 +67,20 @@ test_box_validation_rejects_negative_or_zero_dimensions (tests.test_models.Model
 test_box_volume_calculation (tests.test_models.ModelValidationTests.test_box_volume_calculation) ... ok
 test_order_aggregations (tests.test_models.ModelValidationTests.test_order_aggregations) ... ok
 test_product_validation_rejects_negative_weight (tests.test_models.ModelValidationTests.test_product_validation_rejects_negative_weight) ... ok
+test_cost_optimization_prioritizes_lowest_cost (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_cost_optimization_prioritizes_lowest_cost)
+Verify that the engine always chooses the lowest cost box among all feasible candidates, ... ok
+test_decision_rationale_consistency (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_decision_rationale_consistency)
+Verify that the generated explanation is completely consistent with the audit trail. ... ok
+test_every_box_evaluated_in_audit_trail (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_every_box_evaluated_in_audit_trail)
+Verify that EVERY active box in inventory is evaluated in the audit trail, ... ok
+test_extra_small_padded_mailer_rejection (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_extra_small_padded_mailer_rejection)
+Verify Extra Small Padded Mailer (15x10x5cm, max 1.0kg, $0.75) is rejected ... ok
+test_item_orientation_rotation_enables_fit (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_item_orientation_rotation_enables_fit)
+Verify that 3D orthogonal rotation allows items to fit boxes where original orientation ... ok
+test_parcel_recommendation_and_metrics (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_parcel_recommendation_and_metrics)
+Test user parcel: 20x15x10cm, 1.2kg, 3000cm3. Box-S is selected ... ok
+test_slim_book_box_rejection_against_all_orientations (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_slim_book_box_rejection_against_all_orientations)
+Verify that the Slim Book & Document Box (35x26x6cm, 3kg, $1.10) is rejected ... ok
 test_scenario_10_shipment_modifications_invalidate_outdated_recommendations (tests.test_workflow_integration.RecommendationWorkflowIntegrationTests.test_scenario_10_shipment_modifications_invalidate_outdated_recommendations)
 Scenario 10: Modifying order items, quantities, or product dimensions ... ok
 test_scenario_11_audit_logs_reflect_actual_recommendation_decision (tests.test_workflow_integration.RecommendationWorkflowIntegrationTests.test_scenario_11_audit_logs_reflect_actual_recommendation_decision)
@@ -100,7 +114,7 @@ test_single_item_fits_exact_dimensions (tests.test_packing_engine.PackingEngineT
 test_spatial_collision_failure (tests.test_packing_engine.PackingEngineTests.test_spatial_collision_failure) ... ok
 
 ----------------------------------------------------------------------
-Ran 37 tests in 0.320s
+Ran 44 tests in 0.498s
 
 OK
 Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
@@ -114,9 +128,10 @@ System check identified no issues (0 silenced).
 
 | Test Module | Coverage Scope | Result |
 | :--- | :--- | :--- |
+| `tests.test_validation_parcel` | Test parcel validation (20x15x10cm, 1.2kg), 6-orientation dimensional fit proof, rejection rationale of Slim Book Box ($1.10) & Extra Small Mailer ($0.75), audit trail completeness across 100% catalog, cost-first optimization | **7/7 PASSED (100%)** |
 | `tests.test_workflow_integration` | End-to-end integration covering all 12 recommendation workflow scenarios (queue appearance, cost recalculation, oversized handling, weight limits, order isolation, standalone mode, failure statuses, cache invalidation on item edits, audit logs, frontend API fields) | **12/12 PASSED (100%)** |
 | `tests.test_packing_engine` | 3D Extreme Points placement, 6-axis orthogonal rotations, spatial non-collision, weight enforcement, boundary enforcement, volume checks | **7/7 PASSED (100%)** |
 | `tests.test_box_selector` | Cost minimization (cheapest box chosen), rejection audit trails, multi-box split partitioning, oversized routing, Django Order conversion | **6/6 PASSED (100%)** |
 | `tests.test_api` | REST API viewsets, ad-hoc recommendation endpoint (`POST /api/recommend/`), order recommendation trigger, packing simulation endpoint (`POST /api/simulate/`), 400 validation error handling | **7/7 PASSED (100%)** |
 | `tests.test_models` | Clean validations (positive dimensions, non-negative cost, positive weight), aggregate properties (`volume_liters`, `total_weight`, `total_volume`) | **5/5 PASSED (100%)** |
-| **TOTAL** | **Full System & Core Logic** | **37/37 PASSED (100%)** |
+| **TOTAL** | **Full System & Core Logic** | **44/44 PASSED (100%)** |

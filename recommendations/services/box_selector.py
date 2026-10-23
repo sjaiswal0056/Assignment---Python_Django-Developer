@@ -234,16 +234,27 @@ class BoxSelector:
             )
 
             if pack_res.success:
-                audit_trail.append({
-                    'box_code': box.code,
-                    'box_name': box.name,
-                    'cost': float(box.cost),
-                    'status': 'ACCEPTED',
-                    'reason': f"Optimal fit! Volume utilization: {pack_res.volume_utilization_pct:.1f}%, Weight utilization: {pack_res.weight_utilization_pct:.1f}%",
-                })
-                best_single_result = pack_res
-                best_box_model = box
-                break
+                if best_box_model is None:
+                    # First/cheapest feasible box is selected as optimal
+                    audit_trail.append({
+                        'box_code': box.code,
+                        'box_name': box.name,
+                        'cost': float(box.cost),
+                        'status': 'ACCEPTED',
+                        'reason': f"Optimal fit! Volume utilization: {pack_res.volume_utilization_pct:.1f}%, Weight utilization: {pack_res.weight_utilization_pct:.1f}%",
+                    })
+                    best_single_result = pack_res
+                    best_box_model = box
+                else:
+                    # More expensive box that also fits; evaluate and record as SKIPPED
+                    diff = float(box.cost) - float(best_box_model.cost)
+                    audit_trail.append({
+                        'box_code': box.code,
+                        'box_name': box.name,
+                        'cost': float(box.cost),
+                        'status': 'SKIPPED',
+                        'reason': f"Feasible fit (Volume util: {pack_res.volume_utilization_pct:.1f}%), but skipped to minimize packaging cost (saves ${diff:.2f} vs {box.name}).",
+                    })
             else:
                 audit_trail.append({
                     'box_code': box.code,

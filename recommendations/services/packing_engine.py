@@ -179,13 +179,20 @@ class PackingEngine:
                 rejection_reason=f"Exceeds internal volume: items volume is {total_items_vol:.0f} cm³, box volume is {box_vol:.0f} cm³."
             )
 
-        # Pre-check 3: Single item boundary fit (every item must fit alone)
+        # Pre-check 3: Single item boundary fit (every item must fit alone in at least one orientation)
         sorted_box = sorted([box_length, box_width, box_height])
         for item in items:
             sorted_item = sorted([item.length, item.width, item.height])
             if (sorted_item[0] > sorted_box[0] or
                 sorted_item[1] > sorted_box[1] or
                 sorted_item[2] > sorted_box[2]):
+                if sorted_item[0] > sorted_box[0]:
+                    reason_detail = f"minimum item dimension {sorted_item[0]:.1f}cm exceeds box height/minimum limit {sorted_box[0]:.1f}cm"
+                elif sorted_item[2] > sorted_box[2]:
+                    reason_detail = f"maximum item dimension {sorted_item[2]:.1f}cm exceeds box length/maximum limit {sorted_box[2]:.1f}cm"
+                else:
+                    reason_detail = f"intermediate item dimension {sorted_item[1]:.1f}cm exceeds box width limit {sorted_box[1]:.1f}cm"
+
                 return PackingResult(
                     success=False,
                     box_code=box_code,
@@ -194,7 +201,7 @@ class PackingEngine:
                     box_max_weight=box_max_weight,
                     box_cost=box_cost,
                     unpacked_items=items,
-                    rejection_reason=f"Item '{item.name}' ({item.length}x{item.width}x{item.height}cm) exceeds box dimensions."
+                    rejection_reason=f"Item '{item.name}' ({item.length:.1f}x{item.width:.1f}x{item.height:.1f}cm) exceeds box dimensions ({box_length:.1f}x{box_width:.1f}x{box_height:.1f}cm): {reason_detail} in all orientations."
                 )
 
         # Sort items using Best-Fit Decreasing strategy:

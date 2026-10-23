@@ -234,3 +234,91 @@ class ParcelRecommendationValidationTests(TestCase):
         result = BoxSelector.select_box([self.test_parcel])
         self.assertEqual(result['selected_box'].cost, Decimal("1.40"))
         self.assertLess(result['selected_box'].cost, Decimal("2.60"))
+
+    def test_product_32_21_12_recommends_medium_parcel_box(self):
+        """
+        Verify recommendation for product measuring 32 x 21 x 12 cm and weighing 1.1 kg:
+        Medium Parcel Box (BOX-M at $2.60) is selected as the cheapest feasible option,
+        while all cheaper boxes (BOX-XS at $0.75, BOX-FLAT at $1.10, BOX-S at $1.40)
+        are rejected due to physical constraints across all rotations.
+        """
+        item_32 = ItemToPack(
+            id="item_32_21_12",
+            name="Electronics Console",
+            sku="CONSOLE-32",
+            length=32.0,
+            width=21.0,
+            height=12.0,
+            weight=1.1,
+        )
+        result = BoxSelector.select_box([item_32])
+
+        self.assertEqual(result['status'], 'OPTIMAL')
+        self.assertEqual(result['selected_box'].code, 'BOX-M')
+        self.assertEqual(result['total_cost'], 2.60)
+
+        # Volume utilization: (32 * 21 * 12 = 8,064) / (35 * 28 * 18 = 17,640) = 45.71%
+        self.assertAlmostEqual(result['volume_utilization'], 45.7, places=1)
+        # Weight utilization: 1.1 / 8.0 = 13.75%
+        self.assertAlmostEqual(result['weight_utilization'], 13.8, places=1)
+
+        # Check audit trail rejections for cheaper options
+        audit_trail = {b['box_code']: b for b in result['audit_trail']}
+        self.assertEqual(audit_trail['BOX-XS']['status'], 'REJECTED')
+        self.assertIn("max weight capacity", audit_trail['BOX-XS']['reason'])
+
+        self.assertEqual(audit_trail['BOX-FLAT']['status'], 'REJECTED')
+        self.assertIn("Exceeds internal volume", audit_trail['BOX-FLAT']['reason'])
+
+        self.assertEqual(audit_trail['BOX-S']['status'], 'REJECTED')
+        self.assertIn("Exceeds internal volume", audit_trail['BOX-S']['reason'])
+
+        self.assertEqual(audit_trail['BOX-M']['status'], 'ACCEPTED')
+
+    def test_catalog_product_vs_custom_item_equivalence(self):
+        """
+        Verify that selecting a catalog product and adding a custom item with
+        identical dimensions (32 x 21 x 12 cm, 1.1 kg) produce identical feasibility,
+        selected box, status, packaging cost, and utilization.
+        """
+        # 1. Catalog product simulation
+        catalog_product = Product.objects.create(
+            sku="SKU-CATALOG-32",
+            name="Catalog Item 32x21x12",
+            length=Decimal("32.00"),
+            width=Decimal("21.00"),
+            height=Decimal("12.00"),
+            weight=Decimal("1.10"),
+        )
+        catalog_raw = [{
+            'name': catalog_product.name,
+            'sku': catalog_product.sku,
+            'length': float(catalog_product.length),
+            'width': float(catalog_product.width),
+            'height': float(catalog_product.height),
+            'weight': float(catalog_product.weight),
+            'quantity': 1,
+        }]
+        catalog_items = BoxSelector.items_from_raw_data(catalog_raw)
+        catalog_result = BoxSelector.select_box(catalog_items)
+
+        # 2. Custom item simulation (identical dimensions)
+        custom_raw = [{
+            'name': 'Custom Parcel 32x21x12',
+            'sku': 'CUSTOM-3221',
+            'length': 32.0,
+            'width': 21.0,
+            'height': 12.0,
+            'weight': 1.1,
+            'quantity': 1,
+        }]
+        custom_items = BoxSelector.items_from_raw_data(custom_raw)
+        custom_result = BoxSelector.select_box(custom_items)
+
+        # Assert identical outcomes
+        self.assertEqual(catalog_result['status'], custom_result['status'])
+        self.assertEqual(catalog_result['selected_box'].code, custom_result['selected_box'].code)
+        self.assertEqual(catalog_result['total_cost'], custom_result['total_cost'])
+        self.assertEqual(catalog_result['volume_utilization'], custom_result['volume_utilization'])
+        self.assertEqual(catalog_result['weight_utilization'], custom_result['weight_utilization'])
+        self.assertEqual(len(catalog_result['audit_trail']), len(custom_result['audit_trail']))

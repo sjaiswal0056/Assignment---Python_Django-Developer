@@ -285,33 +285,12 @@ class Command(BaseCommand):
                     quantity=qty
                 )
 
-            # Run box recommendation and persist
-            items = BoxSelector.items_from_order(order)
-            rec_result = BoxSelector.select_box(items)
-
-            BoxRecommendation.objects.update_or_create(
-                order=order,
-                defaults={
-                    'status': rec_result['status'],
-                    'selected_box': rec_result['selected_box'],
-                    'total_cost': Decimal(str(rec_result['total_cost'])),
-                    'total_weight': Decimal(str(rec_result['total_weight'])),
-                    'total_volume': rec_result['total_volume'],
-                    'volume_utilization': rec_result['volume_utilization'],
-                    'weight_utilization': rec_result['weight_utilization'],
-                    'boxes_used': rec_result['boxes_used'],
-                    'packing_layout': rec_result['packing_layout'],
-                    'audit_trail': rec_result['audit_trail'],
-                    'explanation': rec_result['explanation'],
-                }
-            )
-
-            if rec_result['status'] == 'OPTIMAL':
-                order.status = Order.Status.RECOMMENDED
-                order.save()
+            # Run box recommendation via single source of truth
+            rec_result = BoxSelector.recommend_for_order(order)
 
             status_str = rec_result['status']
-            box_code = rec_result['selected_box'].code if rec_result['selected_box'] else 'N/A'
-            self.stdout.write(f"  Order {order.order_number}: [{status_str}] -> Box {box_code} (${rec_result['total_cost']:.2f})")
+            box_code = rec_result['selected_box']['code'] if rec_result.get('selected_box') else 'N/A'
+            cost_val = float(rec_result['total_cost']) if rec_result.get('total_cost') else 0.0
+            self.stdout.write(f"  Order {order.order_number}: [{status_str}] -> Box {box_code} (${cost_val:.2f})")
 
         self.stdout.write(self.style.SUCCESS("\nSuccessfully seeded warehouse data and ran recommendations!"))

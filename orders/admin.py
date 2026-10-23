@@ -40,26 +40,6 @@ class OrderAdmin(admin.ModelAdmin):
     def run_box_recommendation(self, request, queryset):
         count = 0
         for order in queryset:
-            items = BoxSelector.items_from_order(order)
-            res = BoxSelector.select_box(items)
-            BoxRecommendation.objects.update_or_create(
-                order=order,
-                defaults={
-                    'status': res['status'],
-                    'selected_box': res['selected_box'],
-                    'total_cost': Decimal(str(res['total_cost'])),
-                    'total_weight': Decimal(str(res['total_weight'])),
-                    'total_volume': res['total_volume'],
-                    'volume_utilization': res['volume_utilization'],
-                    'weight_utilization': res['weight_utilization'],
-                    'boxes_used': res['boxes_used'],
-                    'packing_layout': res['packing_layout'],
-                    'audit_trail': res['audit_trail'],
-                    'explanation': res['explanation'],
-                }
-            )
-            if res['status'] == 'OPTIMAL':
-                order.status = Order.Status.RECOMMENDED
-                order.save()
+            BoxSelector.recommend_for_order(order)
             count += 1
         self.message_user(request, f"Generated box recommendations for {count} order(s).", messages.SUCCESS)

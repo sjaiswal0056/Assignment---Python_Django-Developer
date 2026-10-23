@@ -32,6 +32,18 @@
         </div>
     </div>
 
+    <!-- Simulator Mode Indicator Banner -->
+    <div id="modeBanner" class="p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-slate-50 border-slate-200 text-xs transition-colors">
+        <div class="flex items-center space-x-2">
+            <span id="modeDot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+            <span class="font-bold text-slate-700" id="modeTitle">Mode: Standalone Simulation</span>
+            <span class="text-slate-500" id="modeDesc">(Ad-hoc custom parcel calculation — will not modify any saved orders)</span>
+        </div>
+        <button id="clearOrderBtn" onclick="switchToStandaloneMode()" class="hidden px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 transition">
+            ✕ Switch to Standalone Mode
+        </button>
+    </div>
+
     <!-- Main 2-Column Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
@@ -253,12 +265,179 @@
 
     </div>
 
+    <!-- Fulfillment Queue & Box Recommendations Section -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-8">
+        <div class="px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+                <h2 class="text-lg font-bold text-slate-800">Fulfillment Queue &amp; Box Recommendations</h2>
+                <p class="text-xs text-slate-500">Live packaging status and recommendations for incoming customer orders</p>
+            </div>
+            <div class="text-xs text-slate-500 flex items-center space-x-2">
+                <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span>Real-time recommendation sync active</span>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-slate-600">
+                <thead class="bg-slate-50 text-slate-500 text-xs uppercase font-semibold border-b border-slate-200">
+                    <tr>
+                        <th class="px-6 py-3">Order</th>
+                        <th class="px-6 py-3">Customer</th>
+                        <th class="px-6 py-3">Items</th>
+                        <th class="px-6 py-3">Total Weight</th>
+                        <th class="px-6 py-3">Status</th>
+                        <th class="px-6 py-3">Recommended Box</th>
+                        <th class="px-6 py-3 text-right">Packaging Cost</th>
+                        <th class="px-6 py-3 text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200" id="fulfillmentQueueTableBody">
+                    {% for order in orders %}
+                    <tr id="queue-row-{{ order.id }}" class="hover:bg-slate-50/80 transition-colors">
+                        <td class="px-6 py-4 font-mono font-bold text-slate-800">
+                            {{ order.order_number }}
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="font-medium text-slate-800">{{ order.customer_name }}</div>
+                            <div class="text-xs text-slate-400">{{ order.customer_email|default:order.shipping_address|truncatechars:28 }}</div>
+                        </td>
+                        <td class="px-6 py-4" id="queue-items-{{ order.id }}">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                                {{ order.total_quantity }} unit(s)
+                            </span>
+                            <div class="text-xs text-slate-400 mt-1">
+                                {% for it in order.items.all|slice:":2" %}
+                                    {{ it.quantity }}x {{ it.product.name }}{% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                                {% if order.items.count > 2 %}...{% endif %}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 font-medium text-slate-700" id="queue-weight-{{ order.id }}">
+                            {{ order.total_weight }} kg
+                        </td>
+                        <td class="px-6 py-4" id="queue-status-{{ order.id }}">
+                            {% if order.is_recommendation_stale or order.status == 'PENDING' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                                    ⏳ Pending
+                                </span>
+                            {% elif order.status == 'RECOMMENDED' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                                    ✓ Recommended
+                                </span>
+                            {% elif order.status == 'SPLIT_REQUIRED' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                                    ⮀ Split Required
+                                </span>
+                            {% elif order.status == 'OVERSIZED' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
+                                    ⚠️ Oversized / Special Freight
+                                </span>
+                            {% elif order.status == 'WEIGHT_EXCEEDED' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
+                                    ⚖️ Weight Limit Exceeded
+                                </span>
+                            {% elif order.status == 'ERROR' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                                    ✕ Error
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                                    {{ order.get_status_display }}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4" id="queue-box-{{ order.id }}">
+                            {% with rec=order.current_recommendation %}
+                                {% if rec and not order.is_recommendation_stale %}
+                                    {% if rec.status == 'OPTIMAL' and rec.selected_box %}
+                                        <div class="font-semibold text-slate-800">{{ rec.selected_box.name }}</div>
+                                        <div class="text-xs font-mono text-indigo-600 font-medium">[{{ rec.selected_box.code }}] &bull; {{ rec.selected_box.dimensions_display }}</div>
+                                    {% elif rec.status == 'SPLIT_REQUIRED' %}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-900">
+                                            Split Across {{ rec.boxes_used|length }} Boxes
+                                        </span>
+                                    {% elif rec.status == 'OVERSIZED' or order.status == 'OVERSIZED' %}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800">
+                                            ⚠️ Oversized / Special Freight
+                                        </span>
+                                    {% elif rec.status == 'WEIGHT_EXCEEDED' or order.status == 'WEIGHT_EXCEEDED' %}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800">
+                                            ⚖️ Weight Limit Exceeded
+                                        </span>
+                                    {% else %}
+                                        <span class="text-xs text-slate-400">{{ rec.get_status_display }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-xs text-slate-400">Not calculated</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td class="px-6 py-4 text-right font-mono font-bold text-slate-800" id="queue-cost-{{ order.id }}">
+                            {% with rec=order.current_recommendation %}
+                                {% if rec and not order.is_recommendation_stale and rec.total_cost > 0 and order.status != 'OVERSIZED' and order.status != 'WEIGHT_EXCEEDED' and order.status != 'ERROR' and order.status != 'PENDING' %}
+                                    ${{ rec.total_cost }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <button id="recalc-btn-{{ order.id }}" onclick="recalculateQueueOrder({{ order.id }})" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition">
+                                Recalculate
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="px-6 py-12 text-center text-slate-400">
+                            No orders found in queue.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
 </div>
 
 <script>
 // State
 let orderItems = [];
 let scene, camera, renderer, controls, boxWireframe, itemMeshes = [];
+let currentLoadedOrderId = null;
+let currentLoadedOrderNumber = null;
+
+function setMode(orderId, orderNumber, customerName) {
+    currentLoadedOrderId = orderId;
+    currentLoadedOrderNumber = orderNumber;
+    const modeBanner = document.getElementById('modeBanner');
+    const modeDot = document.getElementById('modeDot');
+    const modeTitle = document.getElementById('modeTitle');
+    const modeDesc = document.getElementById('modeDesc');
+    const clearBtn = document.getElementById('clearOrderBtn');
+
+    if (orderId) {
+        modeBanner.className = "p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-indigo-50 border-indigo-200 text-xs transition-colors";
+        modeDot.className = "w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse";
+        modeTitle.textContent = `Mode: Linked to Order #${orderNumber}`;
+        modeDesc.textContent = `(${customerName} — calculating recommendation will save and update this order in the fulfillment queue)`;
+        clearBtn.classList.remove('hidden');
+    } else {
+        modeBanner.className = "p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-slate-50 border-slate-200 text-xs transition-colors";
+        modeDot.className = "w-2.5 h-2.5 rounded-full bg-slate-400";
+        modeTitle.textContent = "Mode: Standalone Simulation";
+        modeDesc.textContent = "(Ad-hoc custom parcel calculation — will not modify any saved orders)";
+        clearBtn.classList.add('hidden');
+        const sel = document.getElementById('orderSelect');
+        if (sel) sel.value = "";
+    }
+}
+
+function switchToStandaloneMode() {
+    setMode(null, null, null);
+}
 
 // Color palette for packed 3D items
 const ITEM_COLORS = [
@@ -327,6 +506,7 @@ function clearItems() {
     renderItemsList();
     document.getElementById('resultContainer').classList.add('hidden');
     document.getElementById('idlePlaceholder').classList.remove('hidden');
+    switchToStandaloneMode();
 }
 
 function renderItemsList() {
@@ -382,12 +562,17 @@ function renderItemsList() {
 
 async function loadSelectedOrder() {
     const orderId = document.getElementById('orderSelect').value;
-    if (!orderId) return;
+    if (!orderId) {
+        switchToStandaloneMode();
+        return;
+    }
 
     try {
         const res = await fetch(`/api/orders/${orderId}/`);
         if (!res.ok) throw new Error('Failed to load order');
         const orderData = await res.json();
+
+        setMode(orderData.id, orderData.order_number, orderData.customer_name);
 
         orderItems = [];
         orderData.items.forEach(it => {
@@ -434,6 +619,10 @@ async function calculateRecommendation() {
             }))
         };
 
+        if (currentLoadedOrderId) {
+            payload.order_id = currentLoadedOrderId;
+        }
+
         const res = await fetch('/api/recommend/', {
             method: 'POST',
             headers: {
@@ -449,6 +638,11 @@ async function calculateRecommendation() {
 
         const data = await res.json();
         displayRecommendationResult(data);
+
+        // If this simulation is associated with an order, immediately update the fulfillment queue row
+        if (!data.is_standalone && data.order_id) {
+            updateFulfillmentQueueRow(data);
+        }
     } catch (e) {
         alert('Calculation failed: ' + e.message);
     } finally {
@@ -463,12 +657,22 @@ function displayRecommendationResult(data) {
     container.classList.remove('hidden');
 
     const statusBadge = document.getElementById('statusBadge');
-    if (data.status === 'OPTIMAL') {
+    const s = data.status;
+    if (s === 'OPTIMAL' || s === 'RECOMMENDED') {
         statusBadge.textContent = 'OPTIMAL FIT';
         statusBadge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800';
-    } else if (data.status === 'SPLIT_REQUIRED') {
+    } else if (s === 'SPLIT_REQUIRED') {
         statusBadge.textContent = 'MULTI-BOX SPLIT';
         statusBadge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800';
+    } else if (s === 'WEIGHT_EXCEEDED') {
+        statusBadge.textContent = 'WEIGHT LIMIT EXCEEDED';
+        statusBadge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800';
+    } else if (s === 'OVERSIZED') {
+        statusBadge.textContent = 'OVERSIZED / SPECIAL FREIGHT';
+        statusBadge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800';
+    } else if (s === 'ERROR') {
+        statusBadge.textContent = 'CALCULATION ERROR';
+        statusBadge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-red-100 text-red-800';
     } else {
         statusBadge.textContent = 'NO SUITABLE BOX';
         statusBadge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800';
@@ -478,16 +682,21 @@ function displayRecommendationResult(data) {
         document.getElementById('boxNameDisplay').textContent = data.selected_box.name;
         document.getElementById('boxCodeDisplay').textContent = data.selected_box.code;
         document.getElementById('boxDimensionsDisplay').textContent = `Internal: ${data.selected_box.dimensions} | Max Weight: ${data.selected_box.max_weight} kg`;
-        document.getElementById('boxCostDisplay').textContent = `$${data.total_cost.toFixed(2)}`;
+        document.getElementById('boxCostDisplay').textContent = `$${parseFloat(data.total_cost || 0).toFixed(2)}`;
     } else if (data.boxes_used && data.boxes_used.length > 0) {
         document.getElementById('boxNameDisplay').textContent = `Partitioned into ${data.boxes_used.length} Shipping Boxes`;
         document.getElementById('boxCodeDisplay').textContent = 'SPLIT';
         document.getElementById('boxDimensionsDisplay').textContent = `Split packing across multiple boxes`;
-        document.getElementById('boxCostDisplay').textContent = `$${data.total_cost.toFixed(2)}`;
+        document.getElementById('boxCostDisplay').textContent = `$${parseFloat(data.total_cost || 0).toFixed(2)}`;
+    } else if (s === 'WEIGHT_EXCEEDED') {
+        document.getElementById('boxNameDisplay').textContent = 'Weight Capacity Exceeded';
+        document.getElementById('boxCodeDisplay').textContent = 'OVERWEIGHT';
+        document.getElementById('boxDimensionsDisplay').textContent = 'Total shipment weight exceeds available shipping boxes';
+        document.getElementById('boxCostDisplay').textContent = '-';
     } else {
         document.getElementById('boxNameDisplay').textContent = 'Special Freight Required';
         document.getElementById('boxCodeDisplay').textContent = 'OVERSIZED';
-        document.getElementById('boxDimensionsDisplay').textContent = 'Items exceed all available standard box boundaries';
+        document.getElementById('boxDimensionsDisplay').textContent = 'Items exceed standard box dimensions';
         document.getElementById('boxCostDisplay').textContent = '-';
     }
 
@@ -653,6 +862,106 @@ function initThreeJsScene(boxL, boxW, boxH, items) {
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
     });
+}
+
+function updateFulfillmentQueueRow(data) {
+    const row = document.getElementById(`queue-row-${data.order_id}`);
+    if (!row) return;
+
+    // Update status badge
+    const statusCell = document.getElementById(`queue-status-${data.order_id}`);
+    if (statusCell) {
+        let badgeHtml = '';
+        const s = data.status;
+        if (s === 'OPTIMAL' || s === 'RECOMMENDED') {
+            badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">✓ Recommended</span>`;
+        } else if (s === 'SPLIT_REQUIRED') {
+            badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">⮀ Split Required</span>`;
+        } else if (s === 'OVERSIZED') {
+            badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">⚠️ Oversized / Special Freight</span>`;
+        } else if (s === 'WEIGHT_EXCEEDED') {
+            badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">⚖️ Weight Limit Exceeded</span>`;
+        } else if (s === 'ERROR') {
+            badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">✕ Error</span>`;
+        } else {
+            badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">⏳ Pending</span>`;
+        }
+        statusCell.innerHTML = badgeHtml;
+    }
+
+    // Update box cell
+    const boxCell = document.getElementById(`queue-box-${data.order_id}`);
+    if (boxCell) {
+        let boxHtml = '';
+        if (data.selected_box) {
+            boxHtml = `<div class="font-semibold text-slate-800">${data.selected_box.name}</div>
+                       <div class="text-xs font-mono text-indigo-600 font-medium">[${data.selected_box.code}] &bull; ${data.selected_box.dimensions}</div>`;
+        } else if (data.boxes_used && data.boxes_used.length > 0) {
+            boxHtml = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-900">Split Across ${data.boxes_used.length} Boxes</span>`;
+        } else if (data.status === 'OVERSIZED') {
+            boxHtml = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800">⚠️ Oversized / Special Freight</span>`;
+        } else if (data.status === 'WEIGHT_EXCEEDED') {
+            boxHtml = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800">⚖️ Weight Limit Exceeded</span>`;
+        } else {
+            boxHtml = `<span class="text-xs text-slate-400">Not calculated</span>`;
+        }
+        boxCell.innerHTML = boxHtml;
+    }
+
+    // Update cost cell
+    const costCell = document.getElementById(`queue-cost-${data.order_id}`);
+    if (costCell) {
+        const cost = data.packaging_cost !== undefined ? data.packaging_cost : data.total_cost;
+        if (cost && cost > 0 && data.status !== 'OVERSIZED' && data.status !== 'WEIGHT_EXCEEDED' && data.status !== 'ERROR' && data.status !== 'PENDING') {
+            costCell.textContent = `$${parseFloat(cost).toFixed(2)}`;
+        } else {
+            costCell.textContent = '-';
+        }
+    }
+
+    // Update weight cell if present
+    const weightCell = document.getElementById(`queue-weight-${data.order_id}`);
+    if (weightCell && data.total_weight !== undefined) {
+        weightCell.textContent = `${parseFloat(data.total_weight).toFixed(2)} kg`;
+    }
+
+    // Highlight row briefly
+    row.classList.add('bg-indigo-50/70');
+    setTimeout(() => {
+        row.classList.remove('bg-indigo-50/70');
+    }, 1200);
+}
+
+async function recalculateQueueOrder(orderId) {
+    const btn = document.getElementById(`recalc-btn-${orderId}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '...';
+    }
+    try {
+        const res = await fetch(`/api/orders/${orderId}/recommend/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        if (!res.ok) throw new Error('Recalculation failed');
+        const data = await res.json();
+        updateFulfillmentQueueRow(data);
+
+        // If this order is currently loaded in the simulator, also refresh 3D view
+        if (currentLoadedOrderId === orderId) {
+            displayRecommendationResult(data);
+        }
+    } catch (e) {
+        alert('Recalculation failed: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Recalculate';
+        }
+    }
 }
 
 function getCookie(name) {

@@ -54,14 +54,28 @@ class ExplainerService:
                 lines.append(f"  Box {idx}: {box['box_name']} ({box['box_code']}) - ${box['box_cost']:.2f} ({len(box['packed_items'])} items packed)")
             lines.append(f"Total Multi-Box Packaging Cost: ${total_c:.2f}")
 
-        elif status == "NO_FIT":
+        elif status in ("NO_FIT", "OVERSIZED"):
             lines.append("ALERT: No Suitable Standard Box Found.")
-            lines.append("One or more items exceed the maximum dimension or weight threshold of all warehouse shipping boxes.")
+            lines.append("One or more items exceed the maximum dimension threshold of all warehouse shipping boxes.")
             lines.append("Action Required: Route this order to the Custom Freight / Oversized Cargo handling station.")
             if audit_trail:
                 lines.append("")
                 lines.append("Evaluation details:")
                 for b in audit_trail[:3]:
                     lines.append(f"- {b['box_name']}: {b.get('reason', 'Exceeded capacity')}")
+
+        elif status == "WEIGHT_EXCEEDED":
+            lines.append("ALERT: Weight Limit Exceeded.")
+            lines.append("The shipment weight exceeds the maximum safe weight capacity of available shipping boxes.")
+            lines.append("Action Required: Divide shipment or route to heavy-duty handling station.")
+            if audit_trail:
+                lines.append("")
+                lines.append("Evaluation details:")
+                for b in audit_trail[:3]:
+                    lines.append(f"- {b['box_name']}: {b.get('reason', 'Exceeded capacity')}")
+
+        elif status == "ERROR":
+            lines.append("ERROR: Calculation Error.")
+            lines.append("An error occurred during the box recommendation calculation.")
 
         return "\n".join(lines)

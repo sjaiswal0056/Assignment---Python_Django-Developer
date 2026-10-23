@@ -39,40 +39,22 @@ class RecommendBoxAPIView(views.APIView):
 
         if data.get('order_id'):
             order = get_object_or_404(Order, id=data['order_id'])
-            items = BoxSelector.items_from_order(order)
-            rec_result = BoxSelector.select_box(items)
-
-            # Persist recommendation
-            recommendation, _ = BoxRecommendation.objects.update_or_create(
-                order=order,
-                defaults={
-                    'status': rec_result['status'],
-                    'selected_box': rec_result['selected_box'],
-                    'total_cost': Decimal(str(rec_result['total_cost'])),
-                    'total_weight': Decimal(str(rec_result['total_weight'])),
-                    'total_volume': rec_result['total_volume'],
-                    'volume_utilization': rec_result['volume_utilization'],
-                    'weight_utilization': rec_result['weight_utilization'],
-                    'boxes_used': rec_result['boxes_used'],
-                    'packing_layout': rec_result['packing_layout'],
-                    'audit_trail': rec_result['audit_trail'],
-                    'explanation': rec_result['explanation'],
-                }
-            )
-
-            if rec_result['status'] == 'OPTIMAL':
-                order.status = Order.Status.RECOMMENDED
-                order.save(update_fields=['status'])
-
-            return Response(BoxRecommendationSerializer(recommendation).data, status=status.HTTP_200_OK)
+            items = None
+            if data.get('items'):
+                items = BoxSelector.items_from_raw_data(data['items'])
+            res_data = BoxSelector.recommend_for_order(order, items=items)
+            return Response(res_data, status=status.HTTP_200_OK)
 
         elif data.get('items'):
             items = BoxSelector.items_from_raw_data(data['items'])
             rec_result = BoxSelector.select_box(items)
 
-            # Ad-hoc recommendation
+            # Ad-hoc / Standalone recommendation (does not touch Order or DB)
             response_payload = {
                 'status': rec_result['status'],
+                'order_id': None,
+                'order_number': None,
+                'is_standalone': True,
                 'selected_box': (
                     {
                         'id': rec_result['selected_box'].id,
@@ -82,18 +64,19 @@ class RecommendBoxAPIView(views.APIView):
                         'cost': float(rec_result['selected_box'].cost),
                         'max_weight': float(rec_result['selected_box'].max_weight),
                     }
-                    if rec_result['selected_box']
+                    if rec_result.get('selected_box')
                     else None
                 ),
-                'total_cost': rec_result['total_cost'],
-                'total_weight': rec_result['total_weight'],
-                'total_volume': rec_result['total_volume'],
-                'volume_utilization': round(rec_result['volume_utilization'], 2),
-                'weight_utilization': round(rec_result['weight_utilization'], 2),
-                'boxes_used': rec_result['boxes_used'],
-                'packing_layout': rec_result['packing_layout'],
-                'audit_trail': rec_result['audit_trail'],
-                'explanation': rec_result['explanation'],
+                'total_cost': rec_result.get('total_cost', 0.0),
+                'packaging_cost': rec_result.get('total_cost', 0.0),
+                'total_weight': rec_result.get('total_weight', 0.0),
+                'total_volume': rec_result.get('total_volume', 0.0),
+                'volume_utilization': round(rec_result.get('volume_utilization', 0.0), 2),
+                'weight_utilization': round(rec_result.get('weight_utilization', 0.0), 2),
+                'boxes_used': rec_result.get('boxes_used', []),
+                'packing_layout': rec_result.get('packing_layout', []),
+                'audit_trail': rec_result.get('audit_trail', []),
+                'explanation': rec_result.get('explanation', ''),
             }
             return Response(response_payload, status=status.HTTP_200_OK)
 

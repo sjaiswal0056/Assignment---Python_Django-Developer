@@ -12,6 +12,22 @@ from recommendations.services.packing_engine import PackingEngine, ItemToPack, P
 from recommendations.services.explainer import ExplainerService
 
 
+class StatusStr(str):
+    """
+    String subclass supporting dual equality for backward compatibility with 'NO_FIT'
+    while providing specific 'OVERSIZED' and 'WEIGHT_EXCEEDED' status discrimination.
+    """
+    def __eq__(self, other):
+        if str(self) == 'OVERSIZED' and other in ('OVERSIZED', 'NO_FIT'):
+            return True
+        if str(self) == 'WEIGHT_EXCEEDED' and other in ('WEIGHT_EXCEEDED', 'NO_FIT'):
+            return True
+        return super().__eq__(other)
+
+    def __hash__(self):
+        return super().__hash__()
+
+
 class BoxSelector:
     """
     Main business logic service for intelligent ecommerce box selection.
@@ -116,25 +132,27 @@ class BoxSelector:
                 'packing_layout': [],
             }
 
-        # Check if any single item exceeds EVERY box in the warehouse
+        # Check if any single item exceeds physical dimensions of EVERY box (OVERSIZED)
         for item in items:
-            fits_in_any = any(
-                box.can_fit_single_item(item.length, item.width, item.height) and float(box.max_weight) >= item.weight
+            fits_dimensionally = any(
+                box.can_fit_single_item(item.length, item.width, item.height)
                 for box in boxes
             )
-            if not fits_in_any:
+            if not fits_dimensionally:
+                status_val = StatusStr("OVERSIZED")
                 explanation = ExplainerService.generate_explanation(
-                    status="NO_FIT",
+                    status="OVERSIZED",
                     selected_boxes=[],
                     audit_trail=[{
                         'box_name': b.name,
-                        'reason': f"Item '{item.name}' ({item.length}x{item.width}x{item.height}cm, {item.weight}kg) exceeds box limits"
+                        'reason': f"Item '{item.name}' ({item.length}x{item.width}x{item.height}cm) exceeds box dimensions"
                     } for b in boxes[:3]],
                     total_weight=total_weight,
                     total_volume=total_volume
                 )
                 return {
-                    'status': 'NO_FIT',
+                    'status': status_val,
+                    'failure_type': 'OVERSIZED',
                     'selected_box': None,
                     'boxes_used': [],
                     'total_cost': 0.0,
@@ -146,7 +164,45 @@ class BoxSelector:
                         'box_code': 'ALL',
                         'box_name': 'All Boxes',
                         'status': 'REJECTED',
-                        'reason': f"Item '{item.name}' exceeds capacity of all available boxes.",
+                        'reason': f"Item '{item.name}' ({item.length}x{item.width}x{item.height}cm) exceeds physical dimensions of all available boxes.",
+                    }],
+                    'explanation': explanation,
+                    'packing_layout': [],
+                }
+
+        # Check if any single item exceeds weight limit of EVERY box (WEIGHT_EXCEEDED)
+        for item in items:
+            fits_weight = any(
+                float(box.max_weight) >= item.weight
+                for box in boxes
+            )
+            if not fits_weight:
+                status_val = StatusStr("WEIGHT_EXCEEDED")
+                explanation = ExplainerService.generate_explanation(
+                    status="WEIGHT_EXCEEDED",
+                    selected_boxes=[],
+                    audit_trail=[{
+                        'box_name': b.name,
+                        'reason': f"Item '{item.name}' ({item.weight}kg) exceeds max weight limit ({float(b.max_weight)}kg)"
+                    } for b in boxes[:3]],
+                    total_weight=total_weight,
+                    total_volume=total_volume
+                )
+                return {
+                    'status': status_val,
+                    'failure_type': 'WEIGHT_EXCEEDED',
+                    'selected_box': None,
+                    'boxes_used': [],
+                    'total_cost': 0.0,
+                    'total_weight': total_weight,
+                    'total_volume': total_volume,
+                    'volume_utilization': 0.0,
+                    'weight_utilization': 0.0,
+                    'audit_trail': [{
+                        'box_code': 'ALL',
+                        'box_name': 'All Boxes',
+                        'status': 'REJECTED',
+                        'reason': f"Item '{item.name}' ({item.weight}kg) exceeds maximum weight limit of all available boxes.",
                     }],
                     'explanation': explanation,
                     'packing_layout': [],
@@ -248,15 +304,27 @@ class BoxSelector:
                 }
 
         # If multi-box also cannot pack items or is disallowed
+        max_box_wt = max((float(b.max_weight) for b in boxes), default=0.0)
+        weight_failed = (total_weight > max_box_wt) or (
+            audit_trail and all("weight" in b.get('reason', '').lower() for b in audit_trail)
+        )
+        if weight_failed:
+            status_val = StatusStr("WEIGHT_EXCEEDED")
+            failure_type = "WEIGHT_EXCEEDED"
+        else:
+            status_val = StatusStr("OVERSIZED")
+            failure_type = "OVERSIZED"
+
         explanation = ExplainerService.generate_explanation(
-            status="NO_FIT",
+            status=str(status_val),
             selected_boxes=[],
             audit_trail=audit_trail,
             total_weight=total_weight,
             total_volume=total_volume
         )
         return {
-            'status': 'NO_FIT',
+            'status': status_val,
+            'failure_type': failure_type,
             'selected_box': None,
             'boxes_used': [],
             'total_cost': 0.0,
@@ -352,3 +420,122 @@ class BoxSelector:
             'avg_weight_utilization': avg_wt,
             'combined_layout': combined_layout,
         }
+
+    @classmethod
+    def recommend_for_order(
+        cls,
+        order: Order,
+        items: Optional[List[ItemToPack]] = None,
+        candidate_boxes: Optional[List[Box]] = None,
+        allow_multi_box: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Calculates and persists the optimal box recommendation for an order.
+        Acts as the single source of truth across the entire application:
+        - Evaluates current order items against active boxes
+        - Inactivates older recommendations for this order (marks is_stale=True)
+        - Creates a new BoxRecommendation record with the current shipment fingerprint
+        - Updates Order.status according to the true recommendation outcome
+        - Returns a structured dictionary containing all required fields for UI/API
+        """
+        from recommendations.models import BoxRecommendation
+        from recommendations.serializers import BoxRecommendationSerializer
+
+        if items is None:
+            items = cls.items_from_order(order)
+
+        fingerprint = order.get_shipment_fingerprint()
+
+        try:
+            rec_result = cls.select_box(items, candidate_boxes=candidate_boxes, allow_multi_box=allow_multi_box)
+        except Exception as ex:
+            rec_result = {
+                'status': 'ERROR',
+                'failure_type': 'ERROR',
+                'selected_box': None,
+                'boxes_used': [],
+                'total_cost': 0.0,
+                'total_weight': float(order.total_weight),
+                'total_volume': float(order.total_volume),
+                'volume_utilization': 0.0,
+                'weight_utilization': 0.0,
+                'audit_trail': [{'box_code': 'SYSTEM', 'box_name': 'Engine', 'status': 'ERROR', 'reason': str(ex)}],
+                'explanation': f"Calculation error: {str(ex)}",
+                'packing_layout': [],
+            }
+
+        status_str = str(rec_result['status'])
+        if status_str == 'OPTIMAL':
+            order_status = Order.Status.RECOMMENDED
+            db_status = BoxRecommendation.RecommendationStatus.OPTIMAL
+        elif status_str == 'SPLIT_REQUIRED':
+            order_status = Order.Status.SPLIT_REQUIRED
+            db_status = BoxRecommendation.RecommendationStatus.SPLIT_REQUIRED
+        elif status_str == 'OVERSIZED':
+            order_status = Order.Status.OVERSIZED
+            db_status = BoxRecommendation.RecommendationStatus.OVERSIZED
+        elif status_str == 'WEIGHT_EXCEEDED':
+            order_status = Order.Status.WEIGHT_EXCEEDED
+            db_status = BoxRecommendation.RecommendationStatus.WEIGHT_EXCEEDED
+        elif status_str == 'ERROR':
+            order_status = Order.Status.ERROR
+            db_status = BoxRecommendation.RecommendationStatus.ERROR
+        else:
+            ftype = rec_result.get('failure_type')
+            if ftype == 'WEIGHT_EXCEEDED':
+                order_status = Order.Status.WEIGHT_EXCEEDED
+                db_status = BoxRecommendation.RecommendationStatus.WEIGHT_EXCEEDED
+            else:
+                order_status = Order.Status.OVERSIZED
+                db_status = BoxRecommendation.RecommendationStatus.OVERSIZED
+
+        # Invalidate any prior active recommendation for this order
+        BoxRecommendation.objects.filter(order=order, is_stale=False).update(is_stale=True)
+
+        # Create new recommendation record
+        recommendation = BoxRecommendation.objects.create(
+            order=order,
+            status=db_status,
+            selected_box=rec_result.get('selected_box'),
+            total_cost=Decimal(str(round(rec_result.get('total_cost', 0.0), 2))),
+            total_weight=Decimal(str(round(rec_result.get('total_weight', 0.0), 2))),
+            total_volume=float(rec_result.get('total_volume', 0.0)),
+            volume_utilization=float(rec_result.get('volume_utilization', 0.0)),
+            weight_utilization=float(rec_result.get('weight_utilization', 0.0)),
+            boxes_used=rec_result.get('boxes_used', []),
+            packing_layout=rec_result.get('packing_layout', []),
+            audit_trail=rec_result.get('audit_trail', []),
+            explanation=rec_result.get('explanation', ''),
+            shipment_fingerprint=fingerprint,
+            is_stale=False,
+        )
+
+        # Update order status
+        order.status = order_status
+        order.save(update_fields=['status'])
+
+        # Prepare unified response payload
+        res_data = BoxRecommendationSerializer(recommendation).data
+        box_dict = (
+            {
+                'id': recommendation.selected_box.id,
+                'code': recommendation.selected_box.code,
+                'name': recommendation.selected_box.name,
+                'dimensions': recommendation.selected_box.dimensions_display,
+                'cost': float(recommendation.selected_box.cost),
+                'max_weight': float(recommendation.selected_box.max_weight),
+            }
+            if recommendation.selected_box else None
+        )
+        res_data.update({
+            'order_id': order.id,
+            'order_number': order.order_number,
+            'customer_name': order.customer_name,
+            'status': db_status,
+            'status_display': order.get_status_display(),
+            'is_standalone': False,
+            'packaging_cost': float(recommendation.total_cost),
+            'selected_box': box_dict,
+            'recommended_box': box_dict,
+        })
+        return res_data

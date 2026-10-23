@@ -31,7 +31,7 @@
                 </thead>
                 <tbody class="divide-y divide-slate-200">
                     {% for order in orders %}
-                    <tr class="hover:bg-slate-50/80 transition">
+                    <tr id="queue-row-{{ order.id }}" class="hover:bg-slate-50/80 transition-colors">
                         <td class="px-6 py-4 font-mono font-bold text-slate-800">
                             {{ order.order_number }}
                         </td>
@@ -39,7 +39,7 @@
                             <div class="font-medium text-slate-800">{{ order.customer_name }}</div>
                             <div class="text-xs text-slate-400">{{ order.customer_email }}</div>
                         </td>
-                        <td class="px-6 py-4">
+                        <td class="px-6 py-4" id="queue-items-{{ order.id }}">
                             <ul class="text-xs space-y-1">
                                 {% for it in order.items.all %}
                                 <li>
@@ -49,17 +49,33 @@
                                 {% endfor %}
                             </ul>
                         </td>
-                        <td class="px-6 py-4 font-mono text-slate-700 font-medium">
+                        <td class="px-6 py-4 font-mono text-slate-700 font-medium" id="queue-weight-{{ order.id }}">
                             {{ order.total_weight }} kg
                         </td>
-                        <td class="px-6 py-4">
-                            {% if order.status == 'RECOMMENDED' %}
+                        <td class="px-6 py-4" id="queue-status-{{ order.id }}">
+                            {% if order.is_recommendation_stale or order.status == 'PENDING' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                                    ⏳ Pending
+                                </span>
+                            {% elif order.status == 'RECOMMENDED' %}
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
                                     ✓ Recommended
                                 </span>
-                            {% elif order.status == 'PENDING' %}
+                            {% elif order.status == 'SPLIT_REQUIRED' %}
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
-                                    ⏳ Pending
+                                    ⮀ Split Required
+                                </span>
+                            {% elif order.status == 'OVERSIZED' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
+                                    ⚠️ Oversized / Special Freight
+                                </span>
+                            {% elif order.status == 'WEIGHT_EXCEEDED' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
+                                    ⚖️ Weight Limit Exceeded
+                                </span>
+                            {% elif order.status == 'ERROR' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                                    ✕ Error
                                 </span>
                             {% else %}
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
@@ -67,9 +83,9 @@
                                 </span>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4">
-                            {% with rec=order.recommendations.first %}
-                                {% if rec %}
+                        <td class="px-6 py-4" id="queue-box-{{ order.id }}">
+                            {% with rec=order.current_recommendation %}
+                                {% if rec and not order.is_recommendation_stale %}
                                     {% if rec.selected_box %}
                                         <div class="font-bold text-slate-800">{{ rec.selected_box.name }}</div>
                                         <div class="text-xs text-indigo-600 font-mono">{{ rec.selected_box.code }} &bull; {{ rec.selected_box.dimensions_display }}</div>
@@ -77,19 +93,25 @@
                                         <span class="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
                                             Split: {{ rec.boxes_used|length }} Boxes
                                         </span>
-                                    {% elif rec.status == 'NO_FIT' %}
+                                    {% elif rec.status == 'OVERSIZED' or order.status == 'OVERSIZED' %}
                                         <span class="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
-                                            Oversized / No Standard Fit
+                                            ⚠️ Oversized / Special Freight
                                         </span>
+                                    {% elif rec.status == 'WEIGHT_EXCEEDED' or order.status == 'WEIGHT_EXCEEDED' %}
+                                        <span class="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
+                                            ⚖️ Weight Limit Exceeded
+                                        </span>
+                                    {% else %}
+                                        <span class="text-xs text-slate-400">{{ rec.get_status_display }}</span>
                                     {% endif %}
                                 {% else %}
                                     <span class="text-xs text-slate-400">None</span>
                                 {% endif %}
                             {% endwith %}
                         </td>
-                        <td class="px-6 py-4 text-right font-mono font-bold text-slate-800">
-                            {% with rec=order.recommendations.first %}
-                                {% if rec and rec.total_cost > 0 %}
+                        <td class="px-6 py-4 text-right font-mono font-bold text-slate-800" id="queue-cost-{{ order.id }}">
+                            {% with rec=order.current_recommendation %}
+                                {% if rec and not order.is_recommendation_stale and rec.total_cost > 0 and order.status != 'OVERSIZED' and order.status != 'WEIGHT_EXCEEDED' and order.status != 'ERROR' and order.status != 'PENDING' %}
                                     ${{ rec.total_cost }}
                                 {% else %}
                                     -
@@ -97,8 +119,8 @@
                             {% endwith %}
                         </td>
                         <td class="px-6 py-4 text-center">
-                            <button onclick="runOrderRec({{ order.id }})" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition">
-                                Re-run
+                            <button id="recalc-btn-{{ order.id }}" onclick="runOrderRec({{ order.id }})" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition">
+                                Recalculate
                             </button>
                         </td>
                     </tr>
@@ -116,7 +138,73 @@
 </div>
 
 <script>
+function updateFulfillmentQueueRow(data) {
+    const row = document.getElementById(`queue-row-${data.order_id}`);
+    if (!row) {
+        window.location.reload();
+        return;
+    }
+
+    const statusCell = document.getElementById(`queue-status-${data.order_id}`);
+    if (statusCell) {
+        let badgeHtml = '';
+        const s = data.status;
+        if (s === 'OPTIMAL' || s === 'RECOMMENDED') {
+            badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">✓ Recommended</span>`;
+        } else if (s === 'SPLIT_REQUIRED') {
+            badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">⮀ Split Required</span>`;
+        } else if (s === 'OVERSIZED') {
+            badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">⚠️ Oversized / Special Freight</span>`;
+        } else if (s === 'WEIGHT_EXCEEDED') {
+            badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">⚖️ Weight Limit Exceeded</span>`;
+        } else if (s === 'ERROR') {
+            badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">✕ Error</span>`;
+        } else {
+            badgeHtml = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">⏳ Pending</span>`;
+        }
+        statusCell.innerHTML = badgeHtml;
+    }
+
+    const boxCell = document.getElementById(`queue-box-${data.order_id}`);
+    if (boxCell) {
+        let boxHtml = '';
+        if (data.selected_box) {
+            boxHtml = `<div class="font-bold text-slate-800">${data.selected_box.name}</div>
+                       <div class="text-xs font-mono text-indigo-600 font-medium">[${data.selected_box.code}] &bull; ${data.selected_box.dimensions}</div>`;
+        } else if (data.boxes_used && data.boxes_used.length > 0) {
+            boxHtml = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-900">Split Across ${data.boxes_used.length} Boxes</span>`;
+        } else if (data.status === 'OVERSIZED') {
+            boxHtml = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800">⚠️ Oversized / Special Freight</span>`;
+        } else if (data.status === 'WEIGHT_EXCEEDED') {
+            boxHtml = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800">⚖️ Weight Limit Exceeded</span>`;
+        } else {
+            boxHtml = `<span class="text-xs text-slate-400">None</span>`;
+        }
+        boxCell.innerHTML = boxHtml;
+    }
+
+    const costCell = document.getElementById(`queue-cost-${data.order_id}`);
+    if (costCell) {
+        const cost = data.packaging_cost !== undefined ? data.packaging_cost : data.total_cost;
+        if (cost && cost > 0 && data.status !== 'OVERSIZED' && data.status !== 'WEIGHT_EXCEEDED' && data.status !== 'ERROR' && data.status !== 'PENDING') {
+            costCell.textContent = `$${parseFloat(cost).toFixed(2)}`;
+        } else {
+            costCell.textContent = '-';
+        }
+    }
+
+    row.classList.add('bg-indigo-50/70');
+    setTimeout(() => {
+        row.classList.remove('bg-indigo-50/70');
+    }, 1200);
+}
+
 async function runOrderRec(orderId) {
+    const btn = document.getElementById(`recalc-btn-${orderId}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '...';
+    }
     try {
         const res = await fetch(`/api/orders/${orderId}/recommend/`, {
             method: 'POST',
@@ -126,12 +214,18 @@ async function runOrderRec(orderId) {
             }
         });
         if (res.ok) {
-            window.location.reload();
+            const data = await res.json();
+            updateFulfillmentQueueRow(data);
         } else {
             alert('Recommendation calculation failed.');
         }
     } catch(e) {
         alert('Error: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Recalculate';
+        }
     }
 }
 

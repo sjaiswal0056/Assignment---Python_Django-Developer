@@ -3,7 +3,7 @@
 [![Django](https://img.shields.io/badge/Django-5.2-092E20?style=for-the-badge&logo=django&logoColor=white)](https://www.djangoproject.com/)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Django REST Framework](https://img.shields.io/badge/DRF-3.18-red?style=for-the-badge)](https://www.django-rest-framework.org/)
-[![Tests](https://img.shields.io/badge/Tests-25%2F25%20Passed-brightgreen?style=for-the-badge)]()
+[![Tests](https://img.shields.io/badge/Tests-37%2F37%20Passed-brightgreen?style=for-the-badge)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)]()
 
 An intelligent, production-ready Django application built for ecommerce platforms and fulfillment centers. When customers place orders, SmartBox evaluates physical item dimensions, unit weights, and packaging costs to determine the **most cost-effective shipping box** while guaranteeing **3D spatial non-collision**, **weight capacity compliance**, and **warehouse decision explainability**.

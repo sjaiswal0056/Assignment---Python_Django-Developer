@@ -26,34 +26,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         """
         Trigger box recommendation algorithm for this specific order.
         Persists the result in BoxRecommendation and updates order status.
+        Uses BoxSelector.recommend_for_order as the single source of truth.
         """
         order = self.get_object()
-        items = BoxSelector.items_from_order(order)
-        rec_result = BoxSelector.select_box(items)
-
-        # Update or create recommendation record
-        recommendation, _ = BoxRecommendation.objects.update_or_create(
-            order=order,
-            defaults={
-                'status': rec_result['status'],
-                'selected_box': rec_result['selected_box'],
-                'total_cost': Decimal(str(rec_result['total_cost'])),
-                'total_weight': Decimal(str(rec_result['total_weight'])),
-                'total_volume': rec_result['total_volume'],
-                'volume_utilization': rec_result['volume_utilization'],
-                'weight_utilization': rec_result['weight_utilization'],
-                'boxes_used': rec_result['boxes_used'],
-                'packing_layout': rec_result['packing_layout'],
-                'audit_trail': rec_result['audit_trail'],
-                'explanation': rec_result['explanation'],
-            }
-        )
-
-        if rec_result['status'] == 'OPTIMAL':
-            order.status = Order.Status.RECOMMENDED
-            order.save(update_fields=['status'])
-
-        return Response(
-            BoxRecommendationSerializer(recommendation).data,
-            status=status.HTTP_200_OK
-        )
+        res_data = BoxSelector.recommend_for_order(order)
+        return Response(res_data, status=status.HTTP_200_OK)

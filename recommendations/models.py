@@ -14,6 +14,9 @@ class BoxRecommendation(models.Model):
         OPTIMAL = 'OPTIMAL', 'Optimal Single Box Found'
         SPLIT_REQUIRED = 'SPLIT_REQUIRED', 'Split Required (Multi-Box)'
         NO_FIT = 'NO_FIT', 'No Suitable Box Available'
+        OVERSIZED = 'OVERSIZED', 'Oversized / Special Freight'
+        WEIGHT_EXCEEDED = 'WEIGHT_EXCEEDED', 'Weight Limit Exceeded'
+        ERROR = 'ERROR', 'Calculation Error'
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, null=True, blank=True, related_name='recommendations')
     status = models.CharField(max_length=30, choices=RecommendationStatus.choices, default=RecommendationStatus.OPTIMAL)
@@ -31,6 +34,9 @@ class BoxRecommendation(models.Model):
     packing_layout = models.JSONField(default=list, help_text="3D coordinates and placement of packed items")
     audit_trail = models.JSONField(default=list, help_text="List of candidate boxes evaluated and rejection reasons")
     explanation = models.TextField(help_text="Human-readable explanation of why this recommendation was chosen")
+
+    shipment_fingerprint = models.CharField(max_length=64, blank=True, default="", help_text="SHA256 fingerprint of the order items when computed")
+    is_stale = models.BooleanField(default=False, help_text="Whether this recommendation is invalidated by order item changes")
 
     created_at = models.DateTimeField(auto_now_add=True)
 

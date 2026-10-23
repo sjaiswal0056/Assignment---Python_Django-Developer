@@ -67,9 +67,9 @@ The following core prompts and instructions guided the AI assistance:
 2. **Volumetric vs Dimensional Over-simplification**:
    - In early draft logic, simple volume checking ($\sum V_i \le V_{box}$) was proposed as the primary check.
    - **Resolution**: Intervened to ensure that 3D bounding box checks and coordinate placement are mandatory, because items of long aspect ratios (e.g. a 75cm poster tube) have low volume but cannot physically fit in square boxes.
-3. **Pytest Settings Misconfiguration**:
-   - Running `pytest` initially failed with `django.core.exceptions.ImproperlyConfigured: Requested setting REST_FRAMEWORK`.
-   - **Resolution**: Standardized on Django's native test runner (`python manage.py test`), which properly boots settings, database fixtures, and migrations, and added a `pytest.ini` with `DJANGO_SETTINGS_MODULE = config.settings`.
+4. **Admin Add View NoneType Guard**:
+   - When accessing the Django Admin "Add Box" or "Add Product" form (`/admin/boxes/box/add/`), an unsaved model instance has `None` for length, width, and height. The readonly `@property def volume` initially tried to multiply `self.length * self.width * self.height`, triggering a `TypeError: unsupported operand type(s) for *: 'NoneType' and 'NoneType'`.
+   - **Resolution**: Added null-safe guards to `volume`, `volume_liters`, `dimensions_display`, and order aggregations, returning default `0.0` or `"- "` when dimensions are `None`. Also updated `get_readonly_fields` in `BoxAdmin` and `ProductAdmin` to only display calculated fields on existing instances. Verified all admin forms now load with `200 OK`.
 
 ---
 

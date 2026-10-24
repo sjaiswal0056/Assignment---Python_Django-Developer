@@ -186,7 +186,7 @@ python manage.py test --verbosity=2
 ### Verifying Test Execution
 Output shows all tests passing with 100% success rate:
 ```text
-Ran 25 tests in 0.207s
+Ran 46 tests in 0.207s
 OK
 ```
 See the complete terminal output logged in [`TEST_OUTPUT.md`](file:///d:/python-Django-project/TEST_OUTPUT.md).

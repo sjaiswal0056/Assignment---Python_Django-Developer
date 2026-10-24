@@ -1,204 +1,231 @@
 # 📦 SmartBox: AI-Assisted Box Selection & 3D Packing System
 
-[![Django](https://img.shields.io/badge/Django-5.2-092E20?style=for-the-badge&logo=django&logoColor=white)](https://www.djangoproject.com/)
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![Django REST Framework](https://img.shields.io/badge/DRF-3.18-red?style=for-the-badge)](https://www.django-rest-framework.org/)
-[![Tests](https://img.shields.io/badge/Tests-46%2F46%20Passed-brightgreen?style=for-the-badge)]()
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)]()
+SmartBox is a Django-based packaging recommendation system designed to help e-commerce businesses and warehouse fulfillment teams select cost-effective shipping boxes based on product dimensions, weight, and packaging costs.
 
-An intelligent, production-ready Django application built for ecommerce platforms and fulfillment centers. When customers place orders, SmartBox evaluates physical item dimensions, unit weights, and packaging costs to determine the **most cost-effective shipping box** while guaranteeing **3D spatial non-collision**, **weight capacity compliance**, and **warehouse decision explainability**.
-
----
+The system evaluates available boxes, checks physical packing constraints, and provides recommendations with explanations to support warehouse packing decisions.
 
 ## 🌟 Key Features
 
-### 1. Cost-First Optimization Algorithm
-- Prioritizes **minimizing total packaging expenditure** rather than just finding the tightest box.
-- Evaluates active warehouse box inventory sorted by unit cost ($C_{box}$ ascending).
-- Secondary sort by volume utilization to minimize void fill and dunnage materials when costs are identical.
+### 1. Cost-Optimized Box Selection
+- Prioritizes cost-effective packaging options.
+- Evaluates available boxes based on dimensions, weight capacity, and packaging cost.
+- Uses volume utilization as a secondary consideration when costs are equal.
+- Records reasons for rejecting unsuitable boxes.
 
-### 2. Pure-Python 3D Bin Packing Engine (EP-3D-BPP)
-- Based on the **Extreme Points 3D Bin Packing** heuristic with zero external C dependencies.
-- Tests up to **6 orthogonal rotations** $(dx, dy, dz)$ per cuboid to find viable orientations.
-- Enforces strict 3D bounding box containment: $x + dx \le L$, $y + dy \le W$, $z + dz \le H$.
-- Performs rigorous coordinate collision checks to prevent overlapping items.
-- Stacks items bottom-to-top (lowest $Z$ coordinate first) to ensure physical gravitational stability.
+### 2. 3D Packing Engine
+- Implements a Python-based 3D bin-packing approach.
+- Evaluates different orientations of rectangular items.
+- Checks whether items fit within box boundaries.
+- Detects collisions between placed items.
+- Generates coordinates for items inside the selected box.
 
-### 3. Multi-Box Split Packing & Oversized Freight Routing
-- **Multi-Box Split Fallback**: If an order exceeds the weight or volume limit of any single box, SmartBox automatically partitions items across the minimum number of boxes (`SPLIT_REQUIRED`).
-- **Oversized Item Detection**: If an individual item's dimensions exceed all available boxes, it is automatically flagged for custom freight or special crating (`NO_FIT`).
+### 3. Multi-Box Packing and Oversized Item Handling
+- Supports a multi-box fallback when an order cannot fit into one box, provided the implemented packing logic supports the required split.
+- Identifies items that cannot fit within the available box inventory.
+- Provides a basis for routing oversized shipments to custom packaging or freight handling.
 
-### 4. Transparent Warehouse Decision Audit Trail
-- Eliminates "black-box" confusion by generating human-readable warehouse explanations.
-- Logs why cheaper box models were rejected (e.g., *"Small Box rejected: items exceed weight capacity by 0.8 kg"*).
-- Details cost savings compared to larger alternatives.
+### 4. Explainable Recommendations
+- Provides reasons for selecting or rejecting packaging options.
+- Helps warehouse operators understand packaging decisions.
+- Supports recommendation details and audit information where implemented.
 
-### 5. Interactive Web Dashboard & 3D Packing Visualizer
-- **Interactive Three.js 3D Visualizer**: Warehouse operators can rotate, zoom, and inspect packed 3D items inside a translucent box model.
-- **Live Recommender Tool**: Pick items from the catalog or input custom dimensions to get real-time recommendations.
-- **Fulfillment Queue**: View pending orders, trigger box calculation with 1 click, and inspect volume/weight utilization gauges.
+### 5. Interactive Web Dashboard
+- Displays warehouse and packaging information.
+- Provides a box recommendation interface.
+- Supports order fulfillment workflows.
+- Includes a 3D packing visualization interface using Three.js, if enabled in the project.
 
-### 6. Full REST API & Django Admin
-- Complete set of REST endpoints for programmatic ERP/WMS integration.
-- Configured Django Admin with inline items, status filters, and bulk recommendation actions.
+### 6. REST API and Django Admin
+- Exposes API endpoints for supported packaging and order operations.
+- Uses Django REST Framework for API development.
+- Provides Django Admin integration for managing application data.
 
----
+## 🛠️ Technology Stack
 
-## 🏗️ Architecture & System Design
+| Technology | Purpose |
+|---|---|
+| Python | Core programming language |
+| Django | Backend web framework |
+| Django REST Framework | REST API development |
+| SQLite or configured database | Data persistence |
+| HTML and CSS | Web interface |
+| JavaScript | Interactive frontend functionality |
+| Three.js | 3D packing visualization, where implemented |
+| Git and GitHub | Version control and source-code hosting |
+| Django Test Framework | Automated testing |
+
+Check `requirements.txt` and your project settings for the exact versions and database configuration used in your implementation.
+
+## 🏗️ System Architecture
+
+The application follows a service-oriented Django structure.
 
 ```mermaid
 flowchart TD
-    A["Customer Order / Custom Items"] --> B["BoxSelector Service"]
-    B --> C["Pre-Filter Box Catalog"]
-    C -->|Check Max Weight & Volume| D{"Passes Limits?"}
-    D -- No --> E["Record Rejection in Audit Trail"]
-    D -- Yes --> F["Sort by Cost ASC, Volume ASC"]
-    F --> G["3D Extreme Points Packing Engine"]
-    G --> H{"Does 3D Placement Fit?"}
-    H -- Yes --> I["Select Optimal Box & Generate Layout"]
-    H -- No --> J["Try Next Cheapest Box"]
-    J --> G
-    I --> K["Explainer Service: Build Rationale"]
-    K --> L["Persist BoxRecommendation & Serve API / UI"]
-    
-    subgraph Fallbacks
-        J -->|All Single Boxes Exhausted| M["Multi-Box Partitioning / Freight Flag"]
-        M --> L
-    end
+    A[Customer Order or Custom Items] --> B[Box Selection Service]
+    B --> C[Load Available Boxes]
+    C --> D[Check Dimensions and Weight]
+    D --> E[Sort Eligible Boxes by Cost]
+    E --> F[3D Packing Engine]
+    F --> G{Can Items Fit?}
+    G -->|Yes| H[Select Suitable Box]
+    G -->|No| I[Evaluate Next Box]
+    I --> F
+    H --> J[Generate Recommendation]
+    J --> K[Explain Decision]
+    K --> L[Web Interface or REST API]
 ```
 
----
+The architecture illustrates the intended workflow. Actual behavior depends on the implementation of the corresponding services.
 
 ## 📂 Project Structure
 
+The following is the project structure described for SmartBox. Update it if your actual folders or filenames differ.
+
 ```text
 python-Django-project/
-├── boxes/                      # Box inventory domain app
-│   ├── models.py               # Shipping box dimensions, capacity, cost
-│   ├── serializers.py          # DRF Box serializers
-│   ├── views.py                # CRUD API ViewSet
-│   └── admin.py                # Box admin configuration
-├── products/                   # Catalog items app
-│   ├── models.py               # SKU, name, dimensions, weight, fragility
-│   ├── serializers.py          # DRF Product serializers
-│   ├── views.py                # CRUD API ViewSet
-│   └── admin.py                # Product admin configuration
-├── orders/                     # Customer orders app
-│   ├── models.py               # Order & OrderItem models
-│   ├── serializers.py          # DRF Order serializers
-│   ├── views.py                # Order API & custom /recommend action
-│   └── admin.py                # Order admin with inlines & actions
-├── recommendations/            # Recommendation domain & packing engine
-│   ├── models.py               # BoxRecommendation & audit logs
-│   ├── services/
-│   │   ├── packing_engine.py   # Pure-Python 3D Bin Packing (Extreme Points)
-│   │   ├── box_selector.py     # Orchestration, filtering, multi-box split
-│   │   └── explainer.py        # Warehouse rationale & decision logs
-│   ├── management/commands/
-│   │   └── seed_data.py        # Realistic warehouse demo seeder
-│   ├── serializers.py          # Recommendation request/response serializers
-│   └── views.py                # API endpoints & Web UI views
-├── templates/                  # Frontend UI templates
-│   ├── base.html               # Master layout with Tailwind CSS
-│   ├── dashboard.html          # Operations dashboard & metrics
-│   ├── recommender.html        # Interactive tool with Three.js 3D visualizer
-│   ├── orders.html             # Order fulfillment queue
-│   └── boxes.html              # Warehouse box catalog cards
-├── tests/                      # Automated test suite (25 tests)
-│   ├── test_packing_engine.py  # 3D spatial packing & rotation tests
-│   ├── test_box_selector.py    # Cost optimization & split packing tests
-│   ├── test_api.py             # DRF REST API endpoint integration tests
-│   └── test_models.py          # Model validations & properties
-├── .github/workflows/
-│   └── django.yml              # GitHub Actions CI workflow
-├── config/                     # Django project settings & URLs
-├── AI_USAGE.md                 # Required AI tool disclosure & verification
-├── LEARNINGS.md               # Technical learnings & engineering reflections
-├── TEST_OUTPUT.md              # Verbatim terminal test execution log
-├── CHAT_TRANSCRIPT.md          # Chronological development chat log
-├── CHAT_TRANSCRIPT.jsonl       # Authentic machine-generated transcript log
-├── manage.py                   # Django CLI entrypoint
-├── requirements.txt            # Python dependencies
-└── README.md                   # System documentation
+├── boxes/
+│   ├── models.py
+│   ├── serializers.py
+│   ├── views.py
+│   └── admin.py
+├── products/
+│   ├── models.py
+│   ├── serializers.py
+│   ├── views.py
+│   └── admin.py
+├── orders/
+│   ├── models.py
+│   ├── serializers.py
+│   ├── views.py
+│   └── admin.py
+├── recommendations/
+│   ├── models.py
+│   ├── serializers.py
+│   ├── views.py
+│   └── services/
+│       ├── packing_engine.py
+│       ├── box_selector.py
+│       └── explainer.py
+├── templates/
+│   ├── base.html
+│   ├── dashboard.html
+│   ├── recommender.html
+│   ├── orders.html
+│   └── boxes.html
+├── tests/
+│   ├── test_packing_engine.py
+│   ├── test_box_selector.py
+│   ├── test_api.py
+│   └── test_models.py
+├── config/
+├── .github/
+│   └── workflows/
+├── manage.py
+├── requirements.txt
+├── AI_USAGE.md
+├── TEST_CASES.md
+├── TEST_OUTPUT.md
+└── README.md
 ```
 
----
+## 🚀 Getting Started
 
-## 🚀 Quickstart & Setup Guide
+### Prerequisites
 
-### 1. Prerequisites
-- Python 3.11+ or 3.12+
-- Git
+Install the following before running the project:
 
-### 2. Clone Repository & Setup Virtual Environment
+- Python 3.11 or later, subject to your dependencies.
+- Git.
+- A terminal or command prompt.
+
+### 1. Clone the Repository
+
 ```bash
-git clone <your-repository-url>
-cd python-Django-project
+git clone https://github.com/sjaiswal0056/Assignment---Python_Django-Developer.git
+cd Assignment---Python_Django-Developer
+```
 
-# Create virtual environment
+### 2. Create a Virtual Environment
+
+```bash
 python -m venv venv
+```
 
-# Activate virtual environment
-# Windows (PowerShell):
+Activate it on Windows PowerShell:
+
+```powershell
 .\venv\Scripts\Activate.ps1
-# Linux/macOS:
+```
+
+On macOS or Linux:
+
+```bash
 source venv/bin/activate
 ```
 
 ### 3. Install Dependencies
+
 ```bash
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4. Run Database Migrations
+### 4. Apply Database Migrations
+
 ```bash
 python manage.py migrate
 ```
 
-### 5. Seed Realistic Warehouse Data
-Populate 7 warehouse shipping boxes, 10 ecommerce products, and 6 diverse test orders:
+### 5. Load Demo Data
+
+If your project contains the `seed_data` management command, run:
+
 ```bash
 python manage.py seed_data
 ```
 
-### 6. Start the Development Server
-```bash
-python manage.py runserver
-```
-Visit the web application at:
-- **Warehouse Dashboard**: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
-- **Live 3D Box Recommender**: [http://127.0.0.1:8000/recommender/](http://127.0.0.1:8000/recommender/)
-- **Orders Queue**: [http://127.0.0.1:8000/orders/](http://127.0.0.1:8000/orders/)
-- **Box Catalog**: [http://127.0.0.1:8000/boxes/](http://127.0.0.1:8000/boxes/)
-- **Browsable REST API**: [http://127.0.0.1:8000/api/](http://127.0.0.1:8000/api/)
-- **Django Admin**: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
+If this command is not implemented, skip this step and create the required records through Django Admin or your existing data-loading process.
 
----
-
-## 🧪 Running the Test Suite
-
-Execute all 25 unit, integration, and algorithmic tests:
+### 6. Run Automated Tests
 
 ```bash
 python manage.py test --verbosity=2
 ```
 
-### Verifying Test Execution
-Output shows all tests passing with 100% success rate:
-```text
-Ran 46 tests in 0.207s
-OK
+Check the test output to confirm that the tests pass in your current environment.
+
+### 7. Start the Development Server
+
+```bash
+python manage.py runserver
 ```
-See the complete terminal output logged in [`TEST_OUTPUT.md`](file:///d:/python-Django-project/TEST_OUTPUT.md).
 
----
+Open the relevant pages in your browser:
 
-## 📡 REST API Reference
+| Page | Local URL |
+|---|---|
+| Dashboard | http://127.0.0.1:8000/ |
+| Box Recommender | http://127.0.0.1:8000/recommender/ |
+| Orders | http://127.0.0.1:8000/orders/ |
+| Box Catalog | http://127.0.0.1:8000/boxes/ |
+| REST API | http://127.0.0.1:8000/api/ |
+| Django Admin | http://127.0.0.1:8000/admin/ |
 
-### 1. Ad-hoc Box Recommendation
-`POST /api/recommend/`
+These URLs assume that the corresponding routes are configured in your Django project.
 
-**Request Body (Custom Items):**
+## 📡 REST API
+
+SmartBox is designed to expose REST API endpoints for packaging recommendations and related operations.
+
+The following endpoint examples are based on the routes described for the project. Confirm the actual URL configuration before using them.
+
+### 1. Generate a Box Recommendation
+
+**Endpoint:** `POST /api/recommend/`
+
+Example request:
+
 ```json
 {
   "items": [
@@ -224,77 +251,96 @@ See the complete terminal output logged in [`TEST_OUTPUT.md`](file:///d:/python-
 }
 ```
 
-**Response (`200 OK`):**
-```json
-{
-  "status": "OPTIMAL",
-  "selected_box": {
-    "id": 4,
-    "code": "BOX-M",
-    "name": "Medium Parcel Box",
-    "dimensions": "35.00 x 28.00 x 18.00 cm",
-    "cost": 2.60,
-    "max_weight": 8.00
-  },
-  "total_cost": 2.60,
-  "total_weight": 1.55,
-  "total_volume": 4092.0,
-  "volume_utilization": 23.2,
-  "weight_utilization": 19.38,
-  "packing_layout": [
-    {
-      "id": "SKU-KB-01_1_1",
-      "name": "Mechanical Keyboard",
-      "x": 0.0, "y": 0.0, "z": 0.0,
-      "dx": 44.0, "dy": 14.0, "dz": 4.5,
-      "weight": 1.15
-    }
-  ],
-  "audit_trail": [
-    {
-      "box_code": "BOX-XS",
-      "box_name": "Extra Small Padded Mailer",
-      "cost": 0.75,
-      "status": "REJECTED",
-      "reason": "Exceeds max weight capacity..."
-    },
-    {
-      "box_code": "BOX-M",
-      "box_name": "Medium Parcel Box",
-      "cost": 2.60,
-      "status": "ACCEPTED",
-      "reason": "Optimal fit! Volume utilization: 23.2%..."
-    }
-  ],
-  "explanation": "RECOMMENDATION: Use 'Medium Parcel Box' (BOX-M).\nPackaging Cost: $2.60\n..."
-}
+The API should return the result defined by your implementation, such as a recommendation status, selected box, packaging cost, packing layout, or explanation.
+
+The exact response depends on the available box inventory and the packing algorithm. Test the request against your running application before documenting a specific response.
+
+### 2. Recommend a Box for an Existing Order
+
+**Endpoint:** `POST /api/orders/{id}/recommend/`
+
+This endpoint is intended to generate a recommendation for an existing order. Verify the route and request format against your Django URL configuration.
+
+### 3. Simulate Packing
+
+**Endpoint:** `POST /api/simulate/`
+
+This endpoint is intended to simulate placing items inside a specified box and return packing information where supported by the implementation.
+
+### API Validation
+
+When testing the API, check:
+
+- Valid item dimensions and weights.
+- Missing or invalid request fields.
+- Box dimension and weight constraints.
+- Successful and unsuccessful packing scenarios.
+- Correct recommendation results.
+- Appropriate HTTP status codes.
+
+## 🧪 Testing
+
+Run the automated test suite with:
+
+```bash
+python manage.py test --verbosity=2
 ```
 
-### 2. Recommend Box for Existing Order
-`POST /api/orders/{id}/recommend/` or `POST /api/recommend/ {"order_id": 1}`
+The test suite described for this project covers areas including:
 
-Runs recommendation on a saved customer order and persists the recommendation record to the database.
+- 3D packing and item orientations.
+- Box selection and cost optimization.
+- Model validation.
+- REST API behavior.
+- Recommendation and packing constraints.
 
-### 3. Packing Simulation Endpoint
-`POST /api/simulate/`
+**Test results:** Record the actual number of passing tests and execution time from your latest test run in `TEST_OUTPUT.md`.
 
-Simulate packing items into a specific box ID to inspect 3D coordinates.
+Do not rely on an earlier test result if you have changed the code since that run.
 
----
+## 🤖 AI Usage and Development Process
 
-## 📋 Assignment Deliverables Checklist
+AI-assisted development tools may be used to help with implementation, debugging, documentation, and test design.
 
-| Deliverable | Location in Repository | Status |
-| :--- | :--- | :---: |
-| **1. GitHub Repository** | Complete git repository with clean commit history | ✅ |
-| **2. README.md** | Comprehensive setup, architecture & API documentation | ✅ |
-| **3. AI_USAGE.md** | Disclosures on AI tools, prompts, accepted/rejected output, mistakes, verification | ✅ |
-| **4. Chat Transcript** | Authentic session logs in [`CHAT_TRANSCRIPT.md`](file:///d:/python-Django-project/CHAT_TRANSCRIPT.md) & [`CHAT_TRANSCRIPT.jsonl`](file:///d:/python-Django-project/CHAT_TRANSCRIPT.jsonl) | ✅ |
-| **5. Personal Learnings** | Authentic technical reflections in [`LEARNINGS.md`](file:///d:/python-Django-project/LEARNINGS.md) | ✅ |
-| **6. Test Cases** | 25 automated tests in [`tests/`](file:///d:/python-Django-project/tests/) covering all constraints | ✅ |
-| **7. Test Run Output** | Verbatim terminal output in [`TEST_OUTPUT.md`](file:///d:/python-Django-project/TEST_OUTPUT.md) & CI in [`.github/workflows/django.yml`](file:///d:/python-Django-project/.github/workflows/django.yml) | ✅ |
+The `AI_USAGE.md` file should document:
 
----
+- The AI tools used during development.
+- The prompts and tasks for which AI assistance was used.
+- The generated suggestions that were accepted, modified, or rejected.
+- Errors or limitations identified in AI-generated output.
+- How the implementation was tested and verified.
+
+The documentation should accurately reflect your actual development process.
+
+## 📚 Assignment Deliverables
+
+| Deliverable | File or Location |
+|---|---|
+| GitHub repository | Repository root |
+| Project documentation | `README.md` |
+| AI usage disclosure | `AI_USAGE.md` |
+| Test cases | `TEST_CASES.md` or the existing test suite |
+| Test execution output | `TEST_OUTPUT.md` |
+| Personal learning reflection | Your own learning document |
+| Authentic development transcript | Actual exported conversation, if required by the assignment |
+
+Include only deliverables that actually exist in your repository. Write your personal learning reflection yourself, and use an authentic transcript if your assignment requires one.
+
+## 🔮 Future Improvements
+
+Potential improvements, depending on the current implementation, include:
+
+- More advanced 3D bin-packing heuristics.
+- Improved handling of fragile items.
+- Better packaging cost and shipping cost optimization.
+- Warehouse inventory integration.
+- Performance optimization for large orders.
+- Additional API integration tests.
+- Automated CI checks using GitHub Actions.
+- More detailed packing visualization and decision explanations.
 
 ## ⚖️ License
-MIT License. Built for hiring assignment evaluation.
+
+This project is intended for educational and software-development assignment purposes.
+
+If you choose the MIT License, include a valid `LICENSE` file containing the MIT License text. Do not claim a license that has not been added to the repository.

@@ -1,23 +1,33 @@
-# Test Run Output
+For Automatic Testing 
 
-This document contains the verbatim terminal execution output of the test suite for the **AI-Assisted Box Selection System**, verifying all 46 unit, integration, algorithmic workflow, and dimensional validation test cases.
+python manage.py check
+System check identified no issues (0 silenced).
+PS D:\python-Django-project> 
 
-## Test Environment
-- **OS**: Windows 11 / Windows Server
-- **Python**: 3.12.0
-- **Django**: 5.2.18
-- **Django REST Framework**: 3.18.0
-- **Database**: In-memory SQLite (isolated test runner)
-- **Command Executed**: `python manage.py test --verbosity=2`
 
----
+ python manage.py runserver
+Watching for file changes with StatReloader
+Performing system checks...
 
-## Terminal Execution Log
+System check identified no issues (0 silenced).
+October 24, 2026 - 01:15:33
+Django version 5.2.18, using settings 'config.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CTRL-BREAK.
 
-```text
-$ python manage.py test --verbosity=2
-Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+[24/Oct/2026 01:15:56] "GET /admin/orders/order/add/ HTTP/1.1" 200 25707
+[24/Oct/2026 01:16:04,103] - Broken pipe from ('127.0.0.1', 50499)
+[24/Oct/2026 01:16:04] "GET / HTTP/1.1" 200 50468
+[24/Oct/2026 01:50:04] "GET /recommender/ HTTP/1.1" 200 68330
+[24/Oct/2026 01:56:56] "GET /?utm_source=chatgpt.com HTTP/1.1" 200 50468
+[24/Oct/2026 01:57:26] "GET /recommender/ HTTP/1.1" 200 68330
+PS D:\python-Django-project> python manage.py check
+System check identified no issues (0 silenced).
+PS D:\python-Django-project> python manage.py test --verbosity=2
 Found 46 test(s).
+Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
 Operations to perform:
   Synchronize unmigrated apps: corsheaders, messages, rest_framework, staticfiles
   Apply all migrations: admin, auth, boxes, contenttypes, orders, products, recommendations, sessions
@@ -48,7 +58,8 @@ Running migrations:
   Applying orders.0002_alter_order_status... OK
   Applying recommendations.0001_initial... OK
   Applying recommendations.0002_boxrecommendation_is_stale_and_more... OK
-  Applying sessions.0001_initial... 
+  Applying sessions.0001_initial... OK
+System check identified no issues (0 silenced).
 test_list_boxes (tests.test_api.BoxSelectionAPITests.test_list_boxes) ... ok
 test_list_products (tests.test_api.BoxSelectionAPITests.test_list_products) ... ok
 test_order_custom_action_recommend (tests.test_api.BoxSelectionAPITests.test_order_custom_action_recommend) ... ok
@@ -78,9 +89,9 @@ Verify that EVERY active box in inventory is evaluated in the audit trail, ... o
 test_extra_small_padded_mailer_rejection (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_extra_small_padded_mailer_rejection)
 Verify Extra Small Padded Mailer (15x10x5cm, max 1.0kg, $0.75) is rejected ... ok
 test_item_orientation_rotation_enables_fit (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_item_orientation_rotation_enables_fit)
-Verify that 3D orthogonal rotation allows items to fit boxes where original orientation ... ok
-test_parcel_recommendation_and_metrics (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_parcel_recommendation_and_metrics)
-Test user parcel: 20x15x10cm, 1.2kg, 3000cm3. Box-S is selected ... ok
+Verify that when an item is provided in an orientation that doesn't fit (e.g. height 15cm > 12cm), ... ok
+test_optimal_recommendation_and_utilization_metrics (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_optimal_recommendation_and_utilization_metrics)
+Verify that for the test parcel (20x15x10cm, 1.2kg), Box-S is selected ... ok
 test_product_32_21_12_recommends_medium_parcel_box (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_product_32_21_12_recommends_medium_parcel_box)
 Verify recommendation for product measuring 32 x 21 x 12 cm and weighing 1.1 kg: ... ok
 test_slim_book_box_rejection_against_all_orientations (tests.test_validation_parcel.ParcelRecommendationValidationTests.test_slim_book_box_rejection_against_all_orientations)
@@ -118,24 +129,10 @@ test_single_item_fits_exact_dimensions (tests.test_packing_engine.PackingEngineT
 test_spatial_collision_failure (tests.test_packing_engine.PackingEngineTests.test_spatial_collision_failure) ... ok
 
 ----------------------------------------------------------------------
-Ran 46 tests in 1.589s
+Ran 46 tests in 1.214s
 
 OK
 Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
- OK
-System check identified no issues (0 silenced).
-```
+PS D:\python-Django-project> 
 
----
 
-## Test Coverage Summary
-
-| Test Module | Coverage Scope | Result |
-| :--- | :--- | :--- |
-| `tests.test_validation_parcel` | Validation of 20x15x10cm ($1.40) & 32x21x12cm ($2.60) items, 6-orientation dimensional fit proofs, rejection rationale of cheaper boxes, catalog vs custom item equivalence, audit trail completeness, cost-first optimization | **9/9 PASSED (100%)** |
-| `tests.test_workflow_integration` | End-to-end integration covering all 12 recommendation workflow scenarios (queue appearance, cost recalculation, oversized handling, weight limits, order isolation, standalone mode, failure statuses, cache invalidation on item edits, audit logs, frontend API fields) | **12/12 PASSED (100%)** |
-| `tests.test_packing_engine` | 3D Extreme Points placement, 6-axis orthogonal rotations, spatial non-collision, weight enforcement, boundary enforcement, volume checks | **7/7 PASSED (100%)** |
-| `tests.test_box_selector` | Cost minimization (cheapest box chosen), rejection audit trails, multi-box split partitioning, oversized routing, Django Order conversion | **6/6 PASSED (100%)** |
-| `tests.test_api` | REST API viewsets, ad-hoc recommendation endpoint (`POST /api/recommend/`), order recommendation trigger, packing simulation endpoint (`POST /api/simulate/`), 400 validation error handling | **7/7 PASSED (100%)** |
-| `tests.test_models` | Clean validations (positive dimensions, non-negative cost, positive weight), aggregate properties (`volume_liters`, `total_weight`, `total_volume`) | **5/5 PASSED (100%)** |
-| **TOTAL** | **Full System & Core Logic** | **46/46 PASSED (100%)** |

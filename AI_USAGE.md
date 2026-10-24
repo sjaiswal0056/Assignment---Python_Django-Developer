@@ -1,89 +1,156 @@
-# AI Usage Disclosure Document
+1.---> Which AI tool(s) you used.
+## 1. AI Tools Used
 
-This document fulfills the AI disclosure requirement of the assignment, detailing how AI assistance was leveraged during the conception, implementation, and verification of the **AI-Assisted Box Selection System**.
+### 1. ChatGPT
 
----
+ChatGPT was used for understanding project requirements discussing how to implement Django improving the logic for selecting boxes troubleshooting problems reviewing test results and preparing project documentation.
 
-## 1. AI Tool(s) Used
-- **Primary AI Tool**: Google Antigravity Coding Assistant (powered by the Gemini 3.8 Flash High model).
-- **Environment**: Antigravity Pair-Programming Agent integrated directly into the workspace terminal and file system.
-- **Python / Framework Environment**: Python 3.12.0, Django 5.2.18, Django REST Framework 3.18.0.
+### 2. Antigravity
 
----
+Antigravity was used for AI‑assisted code development, refining application features reviewing the recommendation algorithm, troubleshooting issues and improving the consistency, between the backend logic and the user interface.
 
-## 2. Prompts Given
+AI tools were used as development assistants. Their suggestions were reviewed against the project requirements and the application was tested to verify the implemented functionality.
 
-The following core prompts and instructions guided the AI assistance:
 
-1. **Initial Requirement Ingestion & Verification**:
-   > *"Read all assignment content from the assignment docx in Downloads and implement the full project fulfilling all requirements: small Django-based box recommendation system, box internal dimensions, weight capacity, and cost minimization, AI_USAGE.md, test cases, and test run output."*
+2.-----> The prompts you gave.
+## 2. Prompts Given to AI Tools
 
-2. **Domain Modeling & Architectural Design**:
-   > *"Design a clean 4-app Django architecture (`boxes`, `products`, `orders`, `recommendations`) with a dedicated `services` layer for the bin packing algorithm, keeping models focused on persistence and business logic separated."*
+During development I used AI tools to understand the requirements implement features, troubleshoot issues and verify the application.
 
-3. **Algorithmic Implementation**:
-   > *"Implement a pure-Python 3D Bin Packing heuristic using the Extreme Points algorithm (EP-3D-BPP). Do not rely on external C-based or platform-dependent packages like py3dbp or cvxpy. Support 6-axis orthogonal rotations, strict 3D bounding box containment, and non-overlapping collision checks. Implement a box selector that minimizes box unit cost first, with volumetric fit as secondary criteria, and supports multi-box split partitioning as a fallback."*
+### Prompt 1: Understanding Project Requirements
 
-4. **Testing & Edge Cases**:
-   > *"Write a comprehensive Django test suite covering dimensional limits, weight capacity violations, 3D rotations, cost minimization, multi-box partitioning, model validations, and REST API endpoints. Verify that all 25 tests pass."*
+**AI Tool:** ChatGPT
 
----
+"Help me understand the Python/Django AI-Assisted Box Selection System requirements and identify the features, application components and implementation steps."
 
-## 3. What Output Was Accepted
+### Prompt 2: Implementing Box Selection Logic
 
-- **App Structure & Django Configuration**:
-  - The modular breakdown into `boxes`, `products`, `orders`, and `recommendations` was accepted as it provides clean separation of concerns.
-  - Integration of `rest_framework` and `corsheaders` in `config/settings.py`.
-- **Pure-Python Extreme Points 3D Bin Packing Engine**:
-  - The `ItemToPack`, `PackedItem`, `PackingResult`, and `PackingEngine` dataclasses and placement logic.
-  - The generation of extreme points $(x+dx, y, z), (x, y+dy, z), (x, y, z+dz)$ and sorting by lowest $Z$ coordinate first (bottom-to-top gravity packing).
-  - The orthogonal rotation permutation algorithm generating up to 6 unique orientations per cuboid.
-- **Data Seeding & Realistic Scenarios**:
-  - The management command `python manage.py seed_data` generating 7 distinct box types (from extra-small mailers to heavy-duty crates) and 10 ecommerce items with varying aspect ratios and densities.
-- **Interactive Web Interface & Three.js 3D Visualizer**:
-  - The frontend templates (`base.html`, `dashboard.html`, `recommender.html`, `orders.html`, `boxes.html`) utilizing Tailwind CSS and Three.js with OrbitControls to render real-time 3D box packing layouts.
+**AI Tool:** ChatGPT / Antigravity
 
----
+"Review the box-selection algorithm. The system should evaluate product dimensions, product weight, box dimensions, maximum box weight and box cost. Recommend the lowest-cost box that satisfies all constraints."
 
-## 4. What Output Was Rejected or Modified
+### Prompt 3: Validating Box Recommendations
 
-- **Rejection of External 3D Packing Libraries**:
-  - Initial suggestions to install third-party libraries (such as `py3dbp` or other PyPI wheels) were rejected because third-party libraries often fail to build on Windows environments (lack of C++ build tools), have unfixed bugs with rotation handling, and hide the algorithmic logic.
-  - **Modification**: A self-contained, pure-Python 3D Extreme Points heuristic was built directly in `recommendations/services/packing_engine.py`. This ensures zero native dependencies, 100% deterministic execution across any OS, and full transparency.
-- **Modification of Multi-Box Partitioning**:
-  - A naive fallback that simply reported an error when items didn't fit into a single box was rejected.
-  - **Modification**: Built `_partition_multi_box()` using a greedy First-Fit Decreasing algorithm that groups items into minimal multiple boxes with an explicit `SPLIT_REQUIRED` status and cost aggregation.
-- **Correction in Test Assumptions**:
-  - In `tests/test_box_selector.py`, an initial test case assumed that 2 units of headphones ($18 \times 14 \times 8$ cm each) would fit into `TEST-S` ($20 \times 15 \times 10$ cm).
-  - **AI Analysis & Fix**: The items' combined volume ($2 \times 2016 = 4,032\text{ cm}^3$) physically exceeds `TEST-S` volume ($3,000\text{ cm}^3$). The selector correctly rejected `TEST-S` and selected `TEST-M`. The test was modified to assert `TEST-M` for 2 units, and `TEST-S` for 1 unit, validating the physical precision of the engine.
+**AI Tool:** Antigravity
 
----
+"Review the recommendation service to ensure that boxes are evaluated using their dimensions and weight limits. Consider supported rotations. Ensure that unsuitable boxes are rejected with accurate explanations."
 
-## 5. Mistakes the AI Made & How They Were Resolved
+### Prompt 4: Improving the Fulfillment Queue
 
-1. **Static Files Directory Warning**:
-   - During `python manage.py makemigrations`, Django emitted warning `(?: (staticfiles.W004) The directory ... in STATICFILES_DIRS does not exist)`.
-   - **Resolution**: Created `static/` and `templates/` directories to resolve Django's check cleanly.
-2. **Volumetric vs Dimensional Over-simplification**:
-   - In early draft logic, simple volume checking ($\sum V_i \le V_{box}$) was proposed as the primary check.
-   - **Resolution**: Intervened to ensure that 3D bounding box checks and coordinate placement are mandatory, because items of long aspect ratios (e.g. a 75cm poster tube) have low volume but cannot physically fit in square boxes.
-4. **Admin Add View NoneType Guard**:
-   - When accessing the Django Admin "Add Box" or "Add Product" form (`/admin/boxes/box/add/`), an unsaved model instance has `None` for length, width, and height. The readonly `@property def volume` initially tried to multiply `self.length * self.width * self.height`, triggering a `TypeError: unsupported operand type(s) for *: 'NoneType' and 'NoneType'`.
-   - **Resolution**: Added null-safe guards to `volume`, `volume_liters`, `dimensions_display`, and order aggregations, returning default `0.0` or `"- "` when dimensions are `None`. Also updated `get_readonly_fields` in `BoxAdmin` and `ProductAdmin` to only display calculated fields on existing instances. Verified all admin forms now load with `200 OK`.
+**AI Tool:** Antigravity
 
----
+"Review the Fulfillment Queue workflow. Ensure that recommendations are associated with the orders and that running the standalone parcel simulator does not modify unrelated orders."
 
-## 6. How the Final Code Was Verified
+### Prompt 5: Reviewing the Audit Trail
 
-1. **Automated Unit & Integration Test Suite**:
-   - Ran `python manage.py test --verbosity=2`.
-   - Verified that all **25 tests passed in 0.207s** without any errors or deprecation warnings.
-2. **Database & Migrations Verification**:
-   - Verified that all migrations apply cleanly on a fresh database: `python manage.py migrate`.
-   - Verified schema consistency: `python manage.py makemigrations --check --dry-run`.
-3. **Live End-to-End Simulation**:
-   - Executed `python manage.py seed_data` to simulate real ecommerce orders.
-   - Tested ad-hoc recommendation via `POST /api/recommend/` with curl/fetch payloads.
-   - Verified warehouse audit trail explanations and Three.js 3D visualization rendering in the browser.
-4. **CI/CD Pipeline Setup**:
-   - Verified GitHub Actions workflow definition in `.github/workflows/django.yml` across Python 3.11 and 3.12.
+**AI Tool:** Antigravity
+
+"Review the audit trail to ensure that the acceptance and rejection reasons accurately reflect the box-selection algorithm and its validation rules."
+
+### Prompt 6: Testing and Debugging
+
+**AI Tool:** ChatGPT
+
+"Help me understand the Django automated test results identify issues in the recommendation logic and verify that the tested scenarios cover dimensions, weight constraints, cost optimization, packing and order workflows."
+
+### Prompt 7: Fixing Issues and Verifying Changes
+
+**AI Tool:** ChatGPT / Antigravity
+
+"Review the implementation, against the project requirements identify inconsistencies suggest corrections and explain how to verify the changes using Django system checks and automated tests."
+
+
+3.----> What output you accepted.
+## 3. What I Took in Output
+
+I used ChatGPT and Antigravity to build my Python/Django AI-Assisted Box Selection System.
+
+I accepted and used relevant AI generated suggestions for the tasks below:
+
+1. Box Selection Algorithm:** Help select appropriate boxes based on product dimensions, weight limitations, and box price.
+2. Cost Optimization:** Tips on how to choose the cheapest box that fits all your size and weight requirements.
+3. Validation Logic:** Tips on how to verify product dimensions and weight against box specifications.
+4. Fulfillment Queue:** Help review order recommendations and confirm that standalone parcel calculations do not unintentionally change unrelated orders.
+5. Audit Trail: Guidance on how to determine if the reasons for box acceptance/rejection are consistent with the recommendation logic.
+6. Testing and Debugging:Assist in identifying test scenarios, resolving issues, and understanding Django test results.
+
+4.----> What output you rejected or modified.
+
+## 4. What Output I Rejected or Modified
+
+The main areas I reviewed and refined were:
+
+The main things I checked and improved:
+
+1. **Logic for Box Selection:** I checked that box recommendations were based on product dimensions, weight limits, and cost, not just volume of the box.
+
+2. **Validation of recommendation:** I checked the logic of selection and made sure that boxes that could not fit a product were rejected properly.
+
+3. Fulfillment Queue: I checked the workflow to ensure that calculations for standalone parcels were not affecting other orders.
+
+4. **Audit Trail:** I confirmed that the reasons for accepting or rejecting the box were consistent with the recommendation logic.
+
+5. **Test**: I checked the implementation against project requirements and scenarios tested with automated tests.
+
+5.----> Any mistakes the AI made.
+During verification, the following points have been checked:
+
+Ensuring that box suggestions were made taking into account the dimensions, weight limitations, and box cost.
+
+Checking that the inappropriate boxes were not accepted.
+
+Ensuring that there was consistency between recommendation and audit trail explanation.
+
+Ensuring that separate package calculations did not unintentionally affect other orders.
+
+6. How you verified the final code
+
+----->6. How I Verified the Final Code
+
+The final implementation of the AI-Assisted Box Selection System created with Python/Django has been verified by performing Django system checks, automated testing and manual testing.
+
+### 1. Django System Check
+
+I executed the following command:
+
+`python manage.py check`
+
+**Result:** System check identified no issues (0 silenced).
+
+It has shown that there are no problems detected by Django system check.
+
+### 2. Automated Testing
+
+Django automated testing was done by executing the following command:
+
+`python manage.py test --verbosity=2`
+
+**Test Execution Results:**
+- Number of tests: 46
+- Tests passed: 46
+- Tests failed: 0
+- Final status: OK
+
+### 3. Manual Testing
+
+I manually tested the application via web interface in order to see if its basic functionalities work as intended.
+
+The scenarios used during manual testing included:
+
+- **Box Selection:** Checking whether the application recommends a proper box for a product.
+- **Dimension Validation:** Checking whether boxes, that cannot fit a product inside, are rejected.
+- **Weight Validation:** Checking whether boxes, exceeding the permissible weight limit, are rejected.
+- **Cost Optimization:** Checking whether the recommended box is a least expensive one among the options.
+- **Order Recommendations:** Checking whether recommendations are correctly associated with orders.
+- **Fulfillment Queue:** Checking whether calculations of standalone parcels are not affecting other orders.
+- **Audit Trail:** Checking reasons for accepting/rejecting boxes.
+
+Each manual test was evaluated by comparing the actual result with the expected result. Pass/fail status was noted.
+
+### 4. Final Verification
+
+I have compared the results of the system-checks, automated testing and manual testing with the requirements of the project.
+
+Automated testing gave me a possibility to verify the repeatable scenarios. Manual testing helped to evaluate the application by its interface.
+
+The above mentioned results prove the functionality checked during the testing. They do not guarantee correctness of every possible scenario or input.
